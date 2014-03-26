@@ -143,8 +143,8 @@ class CellMech(object):
             pd.SetInputConnection(self.dsurfs[i].GetOutputPort())
             pd.Update()
 
-            #Build a KD tree of the spatial points
-            tree = vtk.vtkKdTreePointLocator()
+            #Build a Modified BSP tree of the spatial points
+            tree = vtk.vtkModifiedBSPTree()
             tree.SetDataSet(pd.GetOutput())
             tree.BuildLocator()
 
