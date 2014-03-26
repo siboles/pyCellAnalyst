@@ -33,7 +33,8 @@ def obj(x,a):
         d.IntersectWithLine(p2,l,tol,points,cells)
         intersection = [0.,0.,0.]
         points.GetPoint(0,intersection)
-        ssr += np.linalg.norm(p1-intersection)**2
+        length = np.linalg.norm(p1-intersection)
+        ssr += length**2
     return ssr/N
 
 class CellMech(object):
@@ -91,10 +92,14 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                self.rsurfs.append(triangles)
+                refine = vtk.vtkButterflySubdivisionFilter()
+                refine.SetInputConnection(triangles.GetOutputPort())
+                refine.SetNumberOfSubdivisions(2)
+                refine.Update()
+                self.rsurfs.append(refine)
 
                 dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(triangles.GetOutputPort())
+                dl.SetInputConnection(refine.GetOutputPort())
                 dl.Update()
                 self.rmeshes.append(dl)
 
@@ -111,10 +116,14 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                self.dsurfs.append(triangles)
+                refine = vtk.vtkButterflySubdivisionFilter()
+                refine.SetInputConnection(triangles.GetOutputPort())
+                refine.SetNumberOfSubdivisions(2)
+                refine.Update()
+                self.dsurfs.append(refine)
 
                 dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(triangles.GetOutputPort())
+                dl.SetInputConnection(refine.GetOutputPort())
                 dl.Update()
                 self.dmeshes.append(dl)
 
@@ -134,8 +143,8 @@ class CellMech(object):
             pd.SetInputConnection(self.dsurfs[i].GetOutputPort())
             pd.Update()
 
-            #Build the Modified BSPTree
-            tree = vtk.vtkModifiedBSPTree()
+            #Build a KD tree of the spatial points
+            tree = vtk.vtkKdTreePointLocator()
             tree.SetDataSet(pd.GetOutput())
             tree.BuildLocator()
 
@@ -171,7 +180,6 @@ class CellMech(object):
             x = F.flatten()
             F = np.matrix([[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],x[8]]],float)
             E = 0.5*(np.dot(F.T,F)-np.eye(3))
-            print E
 
             bounds = [(0.2,1.8),(-0.5,0.5),(-0.5,0.5),(-0.5,0.5),(0.2,1.8),(-0.5,0.5),(-0.5,0.5),(-0.5,0.5),(0.2,1.8)]
             a = [rpoints,tree,self.dcentroids[i],self.vstrains[i]]
