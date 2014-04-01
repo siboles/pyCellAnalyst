@@ -1,41 +1,60 @@
 import vtk,os,random
 import numpy as np
 from scipy.optimize import minimize
+from scipy.spatial import KDTree
+def matchVol(x,sF,devF,sv,mv,tv,material,spatial,rc,sc):
+    nF = x[0]*sF+x[1]*devF
+    return abs(sv/mv-np.linalg.det(nF))
 
-def positiveVolRatio(x,a):
-    F = np.matrix([[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],x[8]]],float)
-    return np.linalg.det(F)
+def obj(x,sF,devF,sv,mv,tv,material,spatial,rc,sc):
+    nF = x[0]*sF+x[1]*devF
+    #Make a copy of material configuration and deform this with nF
+    nm = vtk.vtkPolyData()
+    nm.DeepCopy(material)
+    pcoords = vtk.vtkFloatArray()
+    pcoords.SetNumberOfComponents(3)
+    pcoords.SetNumberOfTuples(nm.GetNumberOfPoints())
+    for i in xrange(nm.GetNumberOfPoints()):
+        p = [0.,0.,0.]
+        nm.GetPoint(i,p)
+        p = np.dot(nF,p-rc)
+        p.flatten()
+        pcoords.SetTuple3(i,p[0]+sc[0],p[1]+sc[1],p[2]+sc[2])
 
-def matchVolStrain(x,a):
-    vs = a[3]
-    F = np.matrix([[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],x[8]]],float)
-    return np.linalg.det(F)-(vs+1)
+    points = vtk.vtkPoints()
+    points.SetData(pcoords)
+    nm.SetPoints(points)
+    nm.GetPoints().Modified()
 
-def obj(x,a):
-    r =a[0]
-    d = a[1]
-    p2 = a[2]
-    vs = a[3]
+    #calculate both the intersection and the union of the two polydata
+    intersect = vtk.vtkBooleanOperationPolyDataFilter()
+    intersect.SetOperation(1)
+    intersect.SetInputData(0,nm)
+    intersect.SetInputData(1,spatial)
+    intersect.Update()
 
-    F = np.matrix([[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],x[8]]],float)
-    r = np.dot(F,r)
-    r = r.T
-    N = r.shape[0]
-    ssr = 0
-    for i in xrange(N):
-        p1 = r[i,:]
-        p1 = np.array(p1).flatten()
-        u = (p1-p2)/np.linalg.norm(p1-p2)
-        l = p2+1000*u  # a 1000 um line segment from centroid passing through p1
-        tol = 1e-8
-        points = vtk.vtkPoints()
-        cells = vtk.vtkIdList()
-        d.IntersectWithLine(p2,l,tol,points,cells)
-        intersection = [0.,0.,0.]
-        points.GetPoint(0,intersection)
-        length = np.linalg.norm(p1-intersection)
-        ssr += length**2
-    return ssr/N
+    union = vtk.vtkBooleanOperationPolyDataFilter()
+    union.SetOperation(0)
+    union.SetInputData(0,nm)
+    union.SetInputData(1,spatial)
+    union.Update()
+
+    unionmass = vtk.vtkMassProperties()
+    unionmass.SetInputConnection(union.GetOutputPort())
+    vol_union = unionmass.GetVolume()
+
+    if intersect.GetOutput().GetNumberOfPoints() > 0:
+        intmass = vtk.vtkMassProperties()
+        intmass.SetInputConnection(intersect.GetOutputPort())
+        vol_int = intmass.GetVolume()
+    else:
+        #penalize with distance between centroids 
+        w = sc.T-np.dot(nF,rc.T)
+        c = np.linalg.norm(w)
+        vol_int = c*vol_union 
+
+    diff = max([abs(sv-vol_int),abs(sv-vol_union)])
+    return diff
 
 class CellMech(object):
     '''
@@ -78,10 +97,12 @@ class CellMech(object):
         self.daxes = []
         self.vstrains = []
         self.effstrains = []
+        self.localFs = []
 
         self._readstls()
-        self._deform()
+        self._pointwiseF()
         self._getmech()
+        self._deform()
 
     def _readstls(self):
         for fname in sorted(os.listdir(self._ref_dir)):
@@ -92,14 +113,10 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                refine = vtk.vtkButterflySubdivisionFilter()
-                refine.SetInputConnection(triangles.GetOutputPort())
-                refine.SetNumberOfSubdivisions(2)
-                refine.Update()
-                self.rsurfs.append(refine)
+                self.rsurfs.append(triangles.GetOutput())
 
                 dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(refine.GetOutputPort())
+                dl.SetInputConnection(triangles.GetOutputPort())
                 dl.Update()
                 self.rmeshes.append(dl)
 
@@ -116,14 +133,10 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                refine = vtk.vtkButterflySubdivisionFilter()
-                refine.SetInputConnection(triangles.GetOutputPort())
-                refine.SetNumberOfSubdivisions(2)
-                refine.Update()
-                self.dsurfs.append(refine)
+                self.dsurfs.append(triangles.GetOutput())
 
                 dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(refine.GetOutputPort())
+                dl.SetInputConnection(triangles.GetOutputPort())
                 dl.Update()
                 self.dmeshes.append(dl)
 
@@ -138,56 +151,19 @@ class CellMech(object):
         for i in xrange(len(self.rcentroids)):
             # volumetric strains
             self.vstrains.append(self.dvols[i]/self.rvols[i]-1)
-            #create a polydata set of the cell in deformed state
-            pd = vtk.vtkGeometryFilter()
-            pd.SetInputConnection(self.dsurfs[i].GetOutputPort())
-            pd.Update()
-
-            #Build a Modified BSP tree of the spatial points
-            tree = vtk.vtkModifiedBSPTree()
-            tree.SetDataSet(pd.GetOutput())
-            tree.BuildLocator()
-
-            #find the translation vector to align centroids
             tv = self.dcentroids[i]-self.rcentroids[i]
-            #loop over the tetrahedrons and update their vertices to the new position
-            m = vtk.vtkGeometryFilter()
-            m.SetInputConnection(self.rsurfs[i].GetOutputPort())
-            m.Update()
-            N = m.GetOutput().GetNumberOfPoints()
-            rpoints = np.zeros((3,N),float)
-            for j in xrange(N):
-                p = np.array(m.GetOutput().GetPoint(j),float)+tv
-                rpoints[:,j] = p.T
-            e = self.raxes[i]
-            ep = self.daxes[i]
-            A = np.zeros((9,9),float)
-            b = np.zeros((9,1),float)
-            A[0,0:3] = e[:,0].T
-            A[1,3:6] = e[:,0].T
-            A[2,6:9] = e[:,0].T
-            A[3,0:3] = e[:,1].T
-            A[4,3:6] = e[:,1].T
-            A[5,6:9] = e[:,1].T
-            A[6,0:3] = e[:,2].T
-            A[7,3:6] = e[:,2].T
-            A[8,6:9] = e[:,2].T
-            b[0:3,0] = ep[:,0]
-            b[3:6,0] = ep[:,1]
-            b[6:9,0] = ep[:,2]
-
-            F = np.linalg.solve(A,b)
-            x = F.flatten()
-            F = np.matrix([[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],x[8]]],float)
-            E = 0.5*(np.dot(F.T,F)-np.eye(3))
-
-            bounds = [(0.2,1.8),(-0.5,0.5),(-0.5,0.5),(-0.5,0.5),(0.2,1.8),(-0.5,0.5),(-0.5,0.5),(-0.5,0.5),(0.2,1.8)]
-            a = [rpoints,tree,self.dcentroids[i],self.vstrains[i]]
-            options = {"eps":1e-6}
-            constraints = [{"type":"eq","fun":matchVolStrain,"args":(a,)},{"type":"ineq","fun":positiveVolRatio,"args":(a,)}]
-            res = minimize(obj,x,args=(a,),method="SLSQP",bounds=bounds,options=options)
+            bounds = [(0.2,1.5),(0.01,1.5)]
+            x = [1.,1.]
+            # split F into deviatoric and spherical tensors
+            a = 1./3.*np.trace(self.localFs[i])
+            sF = a*np.eye(3)
+            devF = self.localFs[i]-sF
+            print "Starting optimization for Cell %d" % i
+            args=(sF,devF,self.dvols[i],self.rvols[i],tv,self.rsurfs[i],self.dsurfs[i],self.rcentroids[i],self.dcentroids[i])
+            constraints = {"type":"eq","fun":matchVol,"args":args}
+            res = minimize(obj,x,args=args,method="SLSQP",bounds=bounds,jac=False,constraints=constraints,options={"disp":True})
             x = res.x
-            F = np.matrix([[x[0],x[1],x[2]],[x[3],x[4],x[5]],[x[6],x[7],x[8]]],float)
+            F = x[0]*sF+x[1]*devF
             E = 0.5*(np.dot(F.T,F)-np.eye(3))
             self.cell_strains.append(E)
         
@@ -223,6 +199,40 @@ class CellMech(object):
         E = np.linalg.lstsq(dX,ds)[0]
         E = np.array([[E[0,0],E[3,0],E[4,0]],[E[3,0],E[1,0],E[5,0]],[E[4,0],E[5,0],E[2,0]]],float)
         self.ecm_strain = E
+
+    def _pointwiseF(self):
+        d = np.array(self.rcentroids)
+        tree = KDTree(d)
+        # get the 4 nearest neighbors (obviously the first one is the point itself)
+        nn = tree.query(d,k=4)[1]
+        N = len(self.rcentroids)
+        X = []
+        x = []
+        for i in xrange(N):
+            W = np.zeros((3,3),float)
+            w = np.zeros((3,3),float)
+            for j in xrange(3):
+                W[j,:] = self.rcentroids[nn[i,j+1]]-self.rcentroids[i]
+                w[j,:] = self.dcentroids[nn[i,j+1]]-self.dcentroids[i]
+            X.append(W)
+            x.append(w)
+        #Solve the linear system for each pointwise F
+        for i in xrange(N):
+            W = X[i]
+            w = x[i]
+            A = np.zeros((9,9),float)
+            A[0,0:3] = W[0,:]
+            A[1,3:6] = W[0,:]
+            A[2,6:9] = W[0,:]
+            A[3,0:3] = W[1,:]
+            A[4,3:6] = W[1,:]
+            A[5,6:9] = W[1,:]
+            A[6,0:3] = W[2,:]
+            A[7,3:6] = W[2,:]
+            A[8,6:9] = W[2,:]
+            b = w.flatten().T
+            F = np.linalg.solve(A,b)
+            self.localFs.append(F.reshape(3,3))
 
     def _getMassProps(self,mesh):
         tvol = []
