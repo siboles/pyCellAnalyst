@@ -1,60 +1,7 @@
-import vtk,os,random
+import vtk,os,itertools
+import SimpleITK as sitk
 import numpy as np
-from scipy.optimize import minimize
-from scipy.spatial import KDTree
-def matchVol(x,sF,devF,sv,mv,tv,material,spatial,rc,sc):
-    nF = x[0]*sF+x[1]*devF
-    return abs(sv/mv-np.linalg.det(nF))
-
-def obj(x,sF,devF,sv,mv,tv,material,spatial,rc,sc):
-    nF = x[0]*sF+x[1]*devF
-    #Make a copy of material configuration and deform this with nF
-    nm = vtk.vtkPolyData()
-    nm.DeepCopy(material)
-    pcoords = vtk.vtkFloatArray()
-    pcoords.SetNumberOfComponents(3)
-    pcoords.SetNumberOfTuples(nm.GetNumberOfPoints())
-    for i in xrange(nm.GetNumberOfPoints()):
-        p = [0.,0.,0.]
-        nm.GetPoint(i,p)
-        p = np.dot(nF,p-rc)
-        p.flatten()
-        pcoords.SetTuple3(i,p[0]+sc[0],p[1]+sc[1],p[2]+sc[2])
-
-    points = vtk.vtkPoints()
-    points.SetData(pcoords)
-    nm.SetPoints(points)
-    nm.GetPoints().Modified()
-
-    #calculate both the intersection and the union of the two polydata
-    intersect = vtk.vtkBooleanOperationPolyDataFilter()
-    intersect.SetOperation(1)
-    intersect.SetInputData(0,nm)
-    intersect.SetInputData(1,spatial)
-    intersect.Update()
-
-    union = vtk.vtkBooleanOperationPolyDataFilter()
-    union.SetOperation(0)
-    union.SetInputData(0,nm)
-    union.SetInputData(1,spatial)
-    union.Update()
-
-    unionmass = vtk.vtkMassProperties()
-    unionmass.SetInputConnection(union.GetOutputPort())
-    vol_union = unionmass.GetVolume()
-
-    if intersect.GetOutput().GetNumberOfPoints() > 0:
-        intmass = vtk.vtkMassProperties()
-        intmass.SetInputConnection(intersect.GetOutputPort())
-        vol_int = intmass.GetVolume()
-    else:
-        #penalize with distance between centroids 
-        w = sc.T-np.dot(nF,rc.T)
-        c = np.linalg.norm(w)
-        vol_int = c*vol_union 
-
-    diff = max([abs(sv-vol_int),abs(sv-vol_union)])
-    return diff
+from vtk.util import numpy_support
 
 class CellMech(object):
     '''
@@ -63,6 +10,12 @@ class CellMech(object):
     INPUT:
            ref_dir - the directory containing the STL files corresponding to the reference (undeformed) state
            def_dir - the directory containing the STL files corresponding to the deformed state
+           labels    TYPE: Boolean. If True deformation analysis will be performed on the labels.nii images.
+                           This will call deformableRegistration(), which will calculate a displacement map between the two label images.
+           surfaces  TYPE: Boolean. If True, deformation analysis will be performed between STL surfaces.
+                           This will assume a single affine transformation of the cell, and calculate this iteratively with
+                           vtkIterativeClosestPointTransform().
+           NOTE: In the case that both labels and surfaces are set to True, both analyses will be performed.
     MEMBER ATTRIBUTES:
            self.rmeshes - list of delaunay tessalations of the reference STL files
            self.dmeshes - list of delaunay tessalations of the deformed STL files
@@ -76,7 +29,7 @@ class CellMech(object):
            self.rcentroids - centroids of reference state cells
            self.dcentroids - centroids of deformed state cells
     '''
-    def __init__(self,ref_dir=None,def_dir=None):
+    def __init__(self,ref_dir=None,def_dir=None,labels=True,surfaces=False):
         if ref_dir is None:
             raise SystemExit("You must indicate a directory containing reference state STLs. Terminating...")
         if def_dir is None:
@@ -97,10 +50,9 @@ class CellMech(object):
         self.daxes = []
         self.vstrains = []
         self.effstrains = []
-        self.localFs = []
 
         self._readstls()
-        self._pointwiseF()
+        #self._display()
         self._getmech()
         self._deform()
 
@@ -113,10 +65,19 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                self.rsurfs.append(triangles.GetOutput())
+                smooth = vtk.vtkWindowedSincPolyDataFilter()
+                smooth.SetInputConnection(triangles.GetOutputPort())
+                smooth.Update()
+                '''
+                vo = vtk.vtkMassProperties()
+                vo.SetInputConnection(smooth.GetOutputPort())
+                vol = vo.GetVolume()
+                '''
+                #if vol > self.vol_bounds[0] and vol < self.vol_bounds[1]:
+                self.rsurfs.append(smooth.GetOutput())
 
                 dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(triangles.GetOutputPort())
+                dl.SetInputConnection(smooth.GetOutputPort())
                 dl.Update()
                 self.rmeshes.append(dl)
 
@@ -133,10 +94,19 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                self.dsurfs.append(triangles.GetOutput())
+                smooth = vtk.vtkWindowedSincPolyDataFilter()
+                smooth.SetInputConnection(triangles.GetOutputPort())
+                smooth.Update()
+                '''
+                vo = vtk.vtkMassProperties()
+                vo.SetInputConnection(smooth.GetOutputPort())
+                vol = vo.GetVolume()
+                '''
+                #if vol > self.vol_bounds[0] and vol < self.vol_bounds[1]:
+                self.dsurfs.append(smooth.GetOutput())
 
                 dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(triangles.GetOutputPort())
+                dl.SetInputConnection(smooth.GetOutputPort())
                 dl.Update()
                 self.dmeshes.append(dl)
 
@@ -145,48 +115,93 @@ class CellMech(object):
                 self.dcentroids.append(cent)
                 self.daxes.append(axes)
 
-
     def _deform(self):
         #align centroids
         for i in xrange(len(self.rcentroids)):
             # volumetric strains
             self.vstrains.append(self.dvols[i]/self.rvols[i]-1)
-            tv = self.dcentroids[i]-self.rcentroids[i]
-            bounds = [(0.2,1.5),(0.01,1.5)]
-            x = [1.,1.]
-            # split F into deviatoric and spherical tensors
-            a = 1./3.*np.trace(self.localFs[i])
-            sF = a*np.eye(3)
-            devF = self.localFs[i]-sF
-            print "Starting optimization for Cell %d" % i
-            args=(sF,devF,self.dvols[i],self.rvols[i],tv,self.rsurfs[i],self.dsurfs[i],self.rcentroids[i],self.dcentroids[i])
-            constraints = {"type":"eq","fun":matchVol,"args":args}
-            res = minimize(obj,x,args=args,method="SLSQP",bounds=bounds,jac=False,constraints=constraints,options={"disp":True})
-            x = res.x
-            F = x[0]*sF+x[1]*devF
+            ICP = vtk.vtkIterativeClosestPointTransform()
+            ICP.SetSource(self.rsurfs[i])
+            ICP.SetTarget(self.dsurfs[i])
+            ICP.GetLandmarkTransform().SetModeToAffine()
+            ICP.SetMaximumMeanDistance(0.001)
+            ICP.SetCheckMeanDistance(1)
+            ICP.SetMaximumNumberOfIterations(5000)
+            ICP.StartByMatchingCentroidsOn()
+            ICP.Update()
+            F = np.zeros((3,3),float)
+            for j in xrange(3):
+                for k in xrange(3):
+                    F[j,k] = ICP.GetMatrix().GetElement(j,k)
             E = 0.5*(np.dot(F.T,F)-np.eye(3))
+            v_err = np.linalg.det(F) - (self.vstrains[-1]+1)
+            print "Error in Cell %d volume" % i, v_err
             self.cell_strains.append(E)
-        
 
+    def deformableRegistration(self):
+        register = sitk.DiffeomorphicDemonsRegistrationFilter()
+        register.SetNumberOfIterations(100)
+        register.SmoothDisplacementFieldOn()
+        register.SmoothUpdateFieldOff()
+        register.UseImageSpacingOn()
+        register.SetUseGradientType(3)
+        for m,s in itertools.izip(self.material,self.spatial):
+            self.displacements.append(register.Execute(s,m))
+            a = sitk.GetArrayFromImage(self.displacements[-1])
+            a = a.swapaxes(0,2)
+            origin = m.GetOrigin()
+            size = m.GetSize()
+            dX = m.GetSpacing()
+            nodes = np.meshgrid(np.linspace(origin[0],size[0],dX[0]),np.linspace(origin[1],size[1],dX[1]),np.linspace(origin[2],size[2],dX[2]))
+            
     def _getmech(self):
         #get the ECM strain
         rc = np.array(self.rcentroids)
         dc = np.array(self.dcentroids)
-        #make all line segments
-        n = rc.shape[0]
-        X = []
-        x = []
-        ds = []
-        for i in xrange(n-1):
-            for j in xrange(n-i-1):
-                X.append(rc[i,:] - rc[j+i+1,:])
-                x.append(dc[i,:] - dc[j+i+1,:])
-        X = np.array(X,float)
-        x = np.array(x,float)
+        da = numpy_support.numpy_to_vtk(rc)
+        p = vtk.vtkPoints()
+        p.SetData(da)
+        pd = vtk.vtkPolyData()
+        pd.SetPoints(p)
+
+        tet = vtk.vtkDelaunay3D()
+        tet.SetInputData(pd)
+        tet.Update()
+        quality = vtk.vtkMeshQuality()
+        quality.SetInputData(tet.GetOutput())
+        quality.Update()
+        mq = quality.GetOutput().GetCellData().GetArray("Quality")
+        mq = numpy_support.vtk_to_numpy(mq)
+        try:
+            btet = np.argmin(abs(mq-1.0)) # tet with edge ratio closest to 1
+        except:
+            self.ecm_strain = 'N/A'
+            return
+        idlist = tet.GetOutput().GetCell(btet).GetPointIds()
+        P = np.zeros((4,3),float)
+        p = np.zeros((4,3),float)
+        for i in xrange(idlist.GetNumberOfIds()):
+            P[i,:] = rc[idlist.GetId(i),:]
+            p[i,:] = dc[idlist.GetId(i),:]
+        
+        X = np.array([P[1,:]-P[0,:],
+        P[2,:]-P[0,:],
+        P[3,:]-P[0,:],
+        P[3,:]-P[1,:],
+        P[3,:]-P[2,:],
+        P[2,:]-P[1,:]],float)
+        
+        x = np.array([p[1,:]-p[0,:],
+        p[2,:]-p[0,:],
+        p[3,:]-p[0,:],
+        p[3,:]-p[1,:],
+        p[3,:]-p[2,:],
+        p[2,:]-p[1,:]],float)
+        
         #assemble the system
-        dX = np.zeros((X.shape[0],6),float)
-        ds = np.zeros((X.shape[0],1),float)
-        for i in xrange(X.shape[0]):
+        dX = np.zeros((6,6),float)
+        ds = np.zeros((6,1),float)
+        for i in xrange(6):
             dX[i,0] = 2*X[i,0]**2
             dX[i,1] = 2*X[i,1]**2
             dX[i,2] = 2*X[i,2]**2
@@ -196,43 +211,9 @@ class CellMech(object):
 
             ds[i,0] = np.linalg.norm(x[i,:])**2-np.linalg.norm(X[i,:])**2
 
-        E = np.linalg.lstsq(dX,ds)[0]
+        E = np.linalg.solve(dX,ds)
         E = np.array([[E[0,0],E[3,0],E[4,0]],[E[3,0],E[1,0],E[5,0]],[E[4,0],E[5,0],E[2,0]]],float)
         self.ecm_strain = E
-
-    def _pointwiseF(self):
-        d = np.array(self.rcentroids)
-        tree = KDTree(d)
-        # get the 4 nearest neighbors (obviously the first one is the point itself)
-        nn = tree.query(d,k=4)[1]
-        N = len(self.rcentroids)
-        X = []
-        x = []
-        for i in xrange(N):
-            W = np.zeros((3,3),float)
-            w = np.zeros((3,3),float)
-            for j in xrange(3):
-                W[j,:] = self.rcentroids[nn[i,j+1]]-self.rcentroids[i]
-                w[j,:] = self.dcentroids[nn[i,j+1]]-self.dcentroids[i]
-            X.append(W)
-            x.append(w)
-        #Solve the linear system for each pointwise F
-        for i in xrange(N):
-            W = X[i]
-            w = x[i]
-            A = np.zeros((9,9),float)
-            A[0,0:3] = W[0,:]
-            A[1,3:6] = W[0,:]
-            A[2,6:9] = W[0,:]
-            A[3,0:3] = W[1,:]
-            A[4,3:6] = W[1,:]
-            A[5,6:9] = W[1,:]
-            A[6,0:3] = W[2,:]
-            A[7,3:6] = W[2,:]
-            A[8,6:9] = W[2,:]
-            b = w.flatten().T
-            F = np.linalg.solve(A,b)
-            self.localFs.append(F.reshape(3,3))
 
     def _getMassProps(self,mesh):
         tvol = []
@@ -288,3 +269,30 @@ class CellMech(object):
             axes[:,i] = a[i]*vec[:,i]
 
         return volume,centroid,axes
+    def _display(self):
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(self.rsurfs[0])
+        mapper.Update()
+
+        skin = vtk.vtkActor()
+        skin.SetMapper(mapper)
+
+        #renderer
+
+        aRenderer.AddActor(skin)
+        aRenderer.SetActiveCamera(aCamera)
+        aRenderer.ResetCamera ()
+        aCamera.Dolly(1.5)
+        
+        aRenderer.SetBackground(0.0,0.0,0.0)
+        renWin.SetSize(800, 600)
+
+        aRenderer.ResetCameraClippingRange()
+
+        im=vtk.vtkWindowToImageFilter()
+        im.SetInput(renWin)
+
+        iren.Initialize();
+        iren.AddObserver("LeftButtonPressEvent",clickMouse)
+        iren.Start();
+        

@@ -8,6 +8,5 @@ setup(
     author = 'Scott Sibole',
     author_email = 'scott.sibole@gmail.com',
     license = 'MIT',
-    package_data = {'pyCellAnalyst':['examples/*'],},
     description = 'Reconstructs STLs for cells from 3D TIFF image data (may later be extended) and calculates geometric and mechanical metrics',
 ) 
