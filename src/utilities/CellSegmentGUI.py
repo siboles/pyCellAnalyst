@@ -49,7 +49,7 @@ class Application(Frame):
                          'patchNumber':          IntVar(value=20),
                          'patchNoiseModel':      IntVar(value=2),
                          'patchIterations':      IntVar(value=10),
-                         'geodesicPropagation':  DoubleVar(value=0.3),
+                         'geodesicPropagation':  DoubleVar(value=0.1),
                          'geodesicCurvature':    DoubleVar(value=0.1),
                          'geodesicAdvection':    DoubleVar(value=1.0),
                          'geodesicIterations':   IntVar(value=200),
@@ -600,8 +600,6 @@ class Application(Frame):
         objects = ['Foreground','Background']
         for i,d in enumerate(self.directories):
             regions = self.ROI[i]
-            print self.ROI
-            print self.ROI[i]
             vol = Volume(d,
                          pixel_dim=            [self.settings['xdim'].get(),self.settings['ydim'].get(),self.settings['zdim'].get()],
                          regions=              regions,
