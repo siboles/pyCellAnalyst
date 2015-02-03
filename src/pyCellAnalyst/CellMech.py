@@ -36,8 +36,8 @@ class CellMech(object):
             raise SystemExit("You must indicate a directory containing deformed state STLs. Terminating...")
         self._ref_dir = ref_dir
         self._def_dir = def_dir
-        self.rmeshes = []
-        self.dmeshes = []
+        self.rlabels = []
+        self.dlabels = []
         self.rsurfs = []
         self.dsurfs = []
         self.rcentroids = []
@@ -51,9 +51,9 @@ class CellMech(object):
         self.vstrains = []
         self.effstrains = []
 
-        self._readstls()
-        #self._display()
-        self._getmech()
+        if self.surfaces:
+            self._readstls()
+            self._getmech()
         self._deform()
 
     def _readstls(self):
@@ -65,26 +65,7 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                smooth = vtk.vtkWindowedSincPolyDataFilter()
-                smooth.SetInputConnection(triangles.GetOutputPort())
-                smooth.Update()
-                '''
-                vo = vtk.vtkMassProperties()
-                vo.SetInputConnection(smooth.GetOutputPort())
-                vol = vo.GetVolume()
-                '''
-                #if vol > self.vol_bounds[0] and vol < self.vol_bounds[1]:
-                self.rsurfs.append(smooth.GetOutput())
-
-                dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(smooth.GetOutputPort())
-                dl.Update()
-                self.rmeshes.append(dl)
-
-                vol, cent, axes = self._getMassProps(self.rmeshes[-1])
-                self.rvols.append(vol)
-                self.rcentroids.append(cent)
-                self.raxes.append(axes)
+                self.rsurfs.append(triangles.GetOutput())
 
         for fname in sorted(os.listdir(self._def_dir)):
             if '.stl' in fname.lower():
@@ -94,29 +75,9 @@ class CellMech(object):
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
-                smooth = vtk.vtkWindowedSincPolyDataFilter()
-                smooth.SetInputConnection(triangles.GetOutputPort())
-                smooth.Update()
-                '''
-                vo = vtk.vtkMassProperties()
-                vo.SetInputConnection(smooth.GetOutputPort())
-                vol = vo.GetVolume()
-                '''
-                #if vol > self.vol_bounds[0] and vol < self.vol_bounds[1]:
-                self.dsurfs.append(smooth.GetOutput())
-
-                dl = vtk.vtkDelaunay3D()
-                dl.SetInputConnection(smooth.GetOutputPort())
-                dl.Update()
-                self.dmeshes.append(dl)
-
-                vol, cent, axes = self._getMassProps(self.dmeshes[-1])
-                self.dvols.append(vol)
-                self.dcentroids.append(cent)
-                self.daxes.append(axes)
+                self.dsurfs.append(triangles.GetOutput())
 
     def _deform(self):
-        #align centroids
         for i in xrange(len(self.rcentroids)):
             # volumetric strains
             self.vstrains.append(self.dvols[i]/self.rvols[i]-1)
@@ -158,6 +119,9 @@ class CellMech(object):
         #get the ECM strain
         rc = np.array(self.rcentroids)
         dc = np.array(self.dcentroids)
+        if rc.shape[0] < 4:
+            print("WARNING: There are less than 4 objects in the space; therefore, tissue strain was not calculated.")
+            return
         da = numpy_support.numpy_to_vtk(rc)
         p = vtk.vtkPoints()
         p.SetData(da)
@@ -175,7 +139,6 @@ class CellMech(object):
         try:
             btet = np.argmin(abs(mq-1.0)) # tet with edge ratio closest to 1
         except:
-            self.ecm_strain = 'N/A'
             return
         idlist = tet.GetOutput().GetCell(btet).GetPointIds()
         P = np.zeros((4,3),float)
@@ -215,84 +178,28 @@ class CellMech(object):
         E = np.array([[E[0,0],E[3,0],E[4,0]],[E[3,0],E[1,0],E[5,0]],[E[4,0],E[5,0],E[2,0]]],float)
         self.ecm_strain = E
 
-    def _getMassProps(self,mesh):
-        tvol = []
-        tcent = []
-        for i in xrange(mesh.GetOutput().GetNumberOfCells()):
-            tetra = mesh.GetOutput().GetCell(i)
-            points = tetra.GetPoints().GetData()
-            center = [0.,0.,0.]
-            tetra.TetraCenter(points.GetTuple(0),
-                    points.GetTuple(1),
-                    points.GetTuple(2),
-                    points.GetTuple(3),
-                    center)
-            tcent.append(center)
-            tvol.append(tetra.ComputeVolume(points.GetTuple(0),
-                    points.GetTuple(1),
-                    points.GetTuple(2),
-                    points.GetTuple(3)))
-        tvol = np.array(tvol)
-        tcent = np.array(tcent)
-        volume = np.sum(tvol)
-        cx = np.sum(tvol*tcent[:,0])/volume
-        cy = np.sum(tvol*tcent[:,1])/volume
-        cz = np.sum(tvol*tcent[:,2])/volume
-        centroid = np.hstack((cx,cy,cz))
-
-        I = np.zeros((3,3),float)
-        for i in xrange(len(tvol)):
-            tcent[i,:] -= centroid
-            I[0,0] += tvol[i]*(tcent[i,1]**2+tcent[i,2]**2)
-            I[0,1] += -tvol[i]*(tcent[i,0]*tcent[i,1])
-            I[0,2] += -tvol[i]*(tcent[i,0]*tcent[i,2])
-            I[1,1] += tvol[i]*(tcent[i,0]**2+tcent[i,2]**2)
-            I[1,2] += -tvol[i]*(tcent[i,1]*tcent[i,2])
-            I[2,2] += tvol[i]*(tcent[i,0]**2+tcent[i,1]**2)
-        I[1,0] = I[0,1]
-        I[2,0] = I[0,2]
-        I[2,1] = I[1,2]
-
-        [lam,vec] = np.linalg.eig(I)
-        order = np.argsort(lam)[::-1]
-        l = lam[order]
-        v = vec[:,order]
-
-        a = []
-        c = 5./2./volume
-        a.append(np.sqrt(c*(lam[1]+lam[2]-lam[0])))
-        a.append(np.sqrt(c*(lam[0]+lam[2]-lam[1])))
-        a.append(np.sqrt(c*(lam[0]+lam[1]-lam[2])))
-
-        axes = np.zeros((3,3),float)
-        for i in xrange(3):
-            axes[:,i] = a[i]*vec[:,i]
-
-        return volume,centroid,axes
-    def _display(self):
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(self.rsurfs[0])
-        mapper.Update()
-
-        skin = vtk.vtkActor()
-        skin.SetMapper(mapper)
-
-        #renderer
-
-        aRenderer.AddActor(skin)
-        aRenderer.SetActiveCamera(aCamera)
-        aRenderer.ResetCamera ()
-        aCamera.Dolly(1.5)
+    def getDimensions(self):
+        labelstats = self._getLabelShape(self.rlabels)
+        self.rvols = labelstats['volume']
+        self.rcentroids = labelstats['centroid']
+        self.raxes = labelstats['ellipsoid diameters']
+        labelstats = self._getLabelShape(self.dlabels)
+        self.dvols = labelstats['volume']
+        self.dcentroids = labelstats['centroid']
+        self.daxes = labelstats['ellipsoid diameters']
         
-        aRenderer.SetBackground(0.0,0.0,0.0)
-        renWin.SetSize(800, 600)
+    def _getLabelShape(self,img):
+        ls = sitk.LabelShapeStatisticsImageFilter()
+        ls.Execute(img)
+        labels = ls.GetLabels()
+        labelshape = {'volume': [],
+                      'centroid': [],
+                      'ellipsoid diameters': [],
+                      'bounding box': []}
+        for l in labels:
+            labelshape['volume'].append(ls.GetPhysicalSize(l))
+            labelshape['centroid'].append(ls.GetCentroid(l))
+            labelshape['ellipsoid diameters'].append(ls.GetEquivalentEllipsoidDiameter(l))
+            labelshape['bounding box'].append(ls.GetBoundingBox(l))
+        return labelshape
 
-        aRenderer.ResetCameraClippingRange()
-
-        im=vtk.vtkWindowToImageFilter()
-        im.SetInput(renWin)
-
-        iren.Initialize();
-        iren.AddObserver("LeftButtonPressEvent",clickMouse)
-        iren.Start();
-        

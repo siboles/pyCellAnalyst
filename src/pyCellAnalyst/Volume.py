@@ -752,10 +752,12 @@ class Volume(object):
         #create and write the STLs
         stl = vtk.vtkSTLWriter()
         for i,c in enumerate(self._regions):
+            smoothlabel = sitk.BinaryMorphologicalClosing(self.cells==(i+1),3)
+            smoothlabel = sitk.AntiAliasBinary(smoothlabel)
             a = vti.vtkImageImportFromArray()
             a.SetDataSpacing([self._pixel_dim[0],self._pixel_dim[1],self._pixel_dim[2]])
             a.SetDataExtent([0,100,0,100,0,self._img.GetSize()[2]])
-            n = sitk.GetArrayFromImage(self.cells==(i+1))
+            n = sitk.GetArrayFromImage(smoothlabel)
             a.SetArray(n)
             a.Update()
 
@@ -785,11 +787,11 @@ class Volume(object):
             stl.SetInputData(self.surfaces[-1])
             stl.Write()
         if self.display:
-            print('\n************************     Rendering Cells     *****************************')
-            print('                               Please Note:                                   ')
-            print('               The renderings displayed here are voxel-based.                 ') 
-            print('The STL surfaces will be much smoother if viewed in software such as Paraview.')
-            print('******************************************************************************')
+            ## print('\n************************     Rendering Cells     *****************************')
+            ## print('                               Please Note:                                   ')
+            ## print('               The renderings displayed here are voxel-based.                 ') 
+            ## print('The STL surfaces will be much smoother if viewed in software such as Paraview.')
+            ## print('******************************************************************************')
             N = len(self.surfaces)
             colormap = vtk.vtkLookupTable()
             colormap.SetHueRange(0.9,0.1)

@@ -49,11 +49,11 @@ class Application(Frame):
                          'patchNumber':          IntVar(value=20),
                          'patchNoiseModel':      IntVar(value=2),
                          'patchIterations':      IntVar(value=10),
-                         'geodesicPropagation':  DoubleVar(value=0.1),
+                         'geodesicPropagation':  DoubleVar(value=0.15),
                          'geodesicCurvature':    DoubleVar(value=0.1),
                          'geodesicAdvection':    DoubleVar(value=1.0),
                          'geodesicIterations':   IntVar(value=200),
-                         'geodesicRMS':          DoubleVar(value=0.005),
+                         'geodesicRMS':          DoubleVar(value=0.01),
                          'edgeLambda1':          DoubleVar(value=1.1),
                          'edgeLambda2':          DoubleVar(value=1.0),
                          'edgeIterations':       IntVar(value=20)}
@@ -547,6 +547,7 @@ class Application(Frame):
         wb = xlrd.open_workbook(filename)
         N = wb.nsheets
         if '.xls' in filename:
+            self.ROI = [] #clear any previously loaded regions
             for i in xrange(N):
                 self.ROI.append([])
                 s = wb.sheet_by_index(i)
