@@ -1,7 +1,7 @@
 from Tkinter import *
 from ttk import Notebook, Scrollbar
 import tkFileDialog, os, sys, itertools, webbrowser, pickle, copy, xlrd
-from pyCellAnalyst import Volume
+from pyCellAnalyst import Volume,CellMech
 
 class StdoutRedirector(object):
     def __init__(self,text_widget):
@@ -20,10 +20,12 @@ class Application(Frame):
         self.tab1 = Frame(self.notebook)
         self.tab2 = Frame(self.notebook)
         self.tab3 = Frame(self.notebook)
+        self.tab4 = Frame(self.notebook)
 
         self.notebook.add(self.tab1,text="I/O")
         self.notebook.add(self.tab2,text="Filtering")
         self.notebook.add(self.tab3,text="Segmentation")
+        self.notebook.add(self.tab4,text="Kinematics")
         self.notebook.grid(row=0,column=0,sticky=NW)
         
         self.directories = []
@@ -56,7 +58,10 @@ class Application(Frame):
                          'geodesicRMS':          DoubleVar(value=0.01),
                          'edgeLambda1':          DoubleVar(value=1.1),
                          'edgeLambda2':          DoubleVar(value=1.0),
-                         'edgeIterations':       IntVar(value=20)}
+                         'edgeIterations':       IntVar(value=20),
+                         'deformableIterations': IntVar(value=200),
+                         'deformableRMS':        DoubleVar(value=0.01),
+                         'deformableSigma':      DoubleVar(value=3.0)}
         
         self.intSettings = {'stain':              IntVar(value=0),
                             'display':            IntVar(value=1),
@@ -68,7 +73,9 @@ class Application(Frame):
                             'smoothingMethod':    IntVar(value=4),
                             'thresholdMethod':    IntVar(value=3),
                             'thresholdAdaptive':  IntVar(value=1),
-                            'activeMethod':       IntVar(value=2)}
+                            'activeMethod':       IntVar(value=2),
+                            'defReg':             IntVar(value=1),
+                            'saveFEA':            IntVar(value=1)}
 
         self.smoothingMethods = ['None',
                                  'Median',
@@ -154,7 +161,7 @@ class Application(Frame):
         
         #button to execute segmentation(s)
         self.buttonExecute = Button(self.tab1,bg='green',font=('Helvetica','20','bold'))
-        self.buttonExecute["text"] = "Execute"
+        self.buttonExecute["text"] = "Execute Segmentation"
         self.buttonExecute["command"] = self.run_segmentation
         self.buttonExecute.grid(row=7,column=0,columnspan=5,padx=5,pady=5,sticky=W+E)
         
@@ -282,6 +289,61 @@ class Application(Frame):
             Label(self.activeSettingsFrame,text=t).pack(anchor=W)
             Entry(self.activeSettingsFrame,textvariable=self.settings[v]).pack(anchor=W)
 
+        ##### Kinematics Tab ######
+        #create label frame for image directory selection
+        self.materialFrame = LabelFrame(self.tab4,text="Directory containing reference configuration data")
+        self.materialFrame.grid(row=0,column=0,rowspan=1,columnspan=5,padx=5,pady=5,sticky=NW)
+        #add directory
+        self.buttonAddMaterialDirectory = Button(self.materialFrame,bg='green')
+        self.buttonAddMaterialDirectory["text"] = "Load"
+        self.buttonAddMaterialDirectory["command"] = self.add_material_directory
+        self.buttonAddMaterialDirectory.grid(row=0,column=0,padx=5,sticky=W+E)
+        self.materialDirectoryLabel = Label(self.materialFrame,text="")
+        self.materialDirectoryLabel.grid(row=0,column=1,padx=5,pady=5,sticky=W+E)
+        
+        self.spatialFrame = LabelFrame(self.tab4,text="Directories containing deformed configuration data")
+        self.spatialFrame.grid(row=1,column=0,rowspan=2,columnspan=2,padx=5,pady=5,sticky=NW)
+        #add directory
+        self.buttonAddSpatialDirectory = Button(self.spatialFrame,bg='green')
+        self.buttonAddSpatialDirectory["text"] = "Add"
+        self.buttonAddSpatialDirectory["command"] = self.add_spatial_directory
+        self.buttonAddSpatialDirectory.grid(row=1,column=0,padx=5,sticky=W+E)
+        #remove directory
+        self.buttonRemoveSpatialDirectory = Button(self.spatialFrame,bg='red')
+        self.buttonRemoveSpatialDirectory["text"] = "Remove"
+        self.buttonRemoveSpatialDirectory["command"] = self.remove_spatial_directory
+        self.buttonRemoveSpatialDirectory.grid(row=2,column=0,padx=5,sticky=W+E)
+
+        #directory list
+        self.spatialDirectories = []
+        self.listSpatialDirectories = Listbox(self.spatialFrame)
+        self.listSpatialDirectories["width"] = 80
+        self.listSpatialDirectories["selectmode"] = MULTIPLE
+        self.listSpatialDirectories.grid(row=1,column=1,rowspan=2,padx=5,pady=5,sticky=E+W)
+
+        #Options
+        self.kinematicsOptionsFrame = LabelFrame(self.tab4,text="Kinematics Analysis Options")
+        self.kinematicsOptionsFrame.grid(row=3,column=0,padx=5,pady=5,sticky=E+W)
+        settings = [('Perform Deformable Image Registration','defReg'),
+                    ('Save for Finite Element Analysis','saveFEA')]
+        Checkbutton(self.kinematicsOptionsFrame,text='Perform Deformable Image Registration',variable=self.intSettings['defReg'],command=self.populateDeformableSettings).grid(row=3,column=0,padx=5,pady=5,sticky=NW)
+        Checkbutton(self.kinematicsOptionsFrame,text='Save for Finite Element Analysis',variable=self.intSettings['saveFEA']).grid(row=4,column=0,padx=5,pady=5,sticky=NW)
+
+        self.deformableSettingsFrame = LabelFrame(self.tab4,text="Deformable Image Registration Settings")
+        self.deformableSettingsFrame.grid(row=3,column=1,padx=5,pady=5,sticky=E+W)
+        settings = [('Displacement Field Smoothing Variance','deformableSigma'),
+                    ('Maximum RMS error','deformableRMS'),
+                    ('Maximum Iterations','deformableIterations')]
+        for t,v in settings:
+            Label(self.deformableSettingsFrame,text=t).pack(anchor=W)
+            Entry(self.deformableSettingsFrame,textvariable=self.settings[v]).pack(anchor=W)
+
+        #button to execute segmentation(s)
+        self.buttonExecuteKinematics = Button(self.tab4,bg='green',font=('Helvetica','20','bold'))
+        self.buttonExecuteKinematics["text"] = "Execute Analysis"
+        self.buttonExecuteKinematics["command"] = self.run_kinematics
+        self.buttonExecuteKinematics.grid(row=5,column=0,columnspan=2,padx=5,pady=5,sticky=W+E)
+        ##### End Kinematics Tab #####
         
     def populateSmoothingSettings(self):
         for child in self.smoothingSettingsFrame.pack_slaves():
@@ -502,6 +564,17 @@ class Application(Frame):
                 Label(self.activeSettingsFrame,text=t).pack(anchor=W)
                 Entry(self.activeSettingsFrame,textvariable=self.settings[v]).pack(anchor=W)
 
+    def populateDeformableSettings(self):
+        for child in self.deformableSettingsFrame.pack_slaves():
+            child.destroy()
+        if self.intSettings['defReg'].get() == 1:
+            settings = [('Displacement Field Smoothing Variance','deformableSigma'),
+                        ('Maximum RMS error','deformableRMS'),
+                        ('Maximum Iterations','deformableIterations')]
+            for t,v in settings:
+                Label(self.deformableSettingsFrame,text=t).pack(anchor=W)
+                Entry(self.deformableSettingsFrame,textvariable=self.settings[v]).pack(anchor=W)
+                
     def add_directory(self):
         dir_name = tkFileDialog.askdirectory(parent=root,initialdir=self.lastdir,title = "Select directory containing images.")
         self.lastdir = dir_name
@@ -514,6 +587,27 @@ class Application(Frame):
             for i in index[::-1]:
                 self.listDirectories.delete(i)
                 del self.directories[i]
+
+    def add_material_directory(self):
+        dir_name = tkFileDialog.askdirectory(parent=root,initialdir=self.lastdir,title = "Select directory containing reference configuration data.")
+        if dir_name:
+            self.lastdir = dir_name
+            self.materialDirectory = dir_name
+            self.materialDirectoryLabel["text"] = dir_name
+
+    def add_spatial_directory(self):
+        dir_name = tkFileDialog.askdirectory(parent=root,initialdir=self.lastdir,title = "Select directory containing reference configuration data.")
+        if dir_name:
+            self.lastdir = dir_name
+            self.spatialDirectories.append(dir_name)
+            self.listSpatialDirectories.insert(END,dir_name)
+
+    def remove_spatial_directory(self):
+        index = self.listSpatialDirectories.curselection()
+        if index:
+            for i in index[::-1]:
+                self.listSpatialDirectories.delete(i)
+                del self.spatialDirectories[i]
 
     def saveSettings(self):
         filename = tkFileDialog.asksaveasfilename(defaultextension=".pkl")
@@ -544,9 +638,9 @@ class Application(Frame):
 
     def loadROI(self):
         filename = tkFileDialog.askopenfilename(parent=root,initialdir=os.getcwd(),title = "Select an .xls file containing Regions of Interest.")
-        wb = xlrd.open_workbook(filename)
-        N = wb.nsheets
         if '.xls' in filename:
+            wb = xlrd.open_workbook(filename)
+            N = wb.nsheets
             self.ROI = [] #clear any previously loaded regions
             for i in xrange(N):
                 self.ROI.append([])
@@ -564,9 +658,10 @@ class Application(Frame):
                         tmp[5] = int(v[4]) - tmp[2]
                         self.ROI[i].append(tmp)
         else:
-            print("{:s} does not have proper extension. Currently supporting only .xls filetypes.")
+            print("{:s} does not have proper extension. Currently supporting only .xls filetypes.".format(filename))
             
 
+            
     def run_segmentation(self):
         if not self.directories:
             print "WARNING: no directories have been indicated; nothing has been done."
@@ -634,6 +729,15 @@ class Application(Frame):
 
             vol.writeLabels()
             vol.writeSurfaces()
+
+    def run_kinematics(self):
+        for i,d in enumerate(self.spatialDirectories):
+            mech = CellMech(ref_dir=self.materialDirectory,def_dir=d,
+                            deformable=self.intSettings['defReg'].get(),
+                            saveFEA=self.intSettings['saveFEA'].get(),
+                            deformableSettings={'Iterations':self.settings['deformableIterations'].get(),
+                                                'Maximum RMS':self.settings['deformableRMS'].get(),
+                                                'Displacement Smoothing':self.settings['deformableSigma'].get()})
             
     def open_smoothing_reference(self,*args):
         webbrowser.open_new(self.smoothingLink)
