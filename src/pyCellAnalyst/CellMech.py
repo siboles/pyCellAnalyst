@@ -135,12 +135,17 @@ class CellMech(object):
             rorigin = np.array(region[0:3]) - bufferzone
             dorigin = np.array(self.dbbox[r][0:3]) - bufferzone
             rroi = sitk.RegionOfInterest(self.rlabels==(r+1),newsize,rorigin)
-            rroi = sitk.AntiAliasBinary(rroi)
             droi = sitk.RegionOfInterest(self.dlabels==(r+1),newsize,dorigin)
-            droi = sitk.AntiAliasBinary(droi)
             droi.SetOrigin(rroi.GetOrigin())
             #set up initial displacement field as translation of deformed cell r to reference cell r bounding box origin
-            #translation = np.array(rroi.TransformIndexToPhysicalPoint(rorigin)) - np.array(rroi.TransformIndexToPhysicalPoint(dorigin))
+            translation = (rorigin-dorigin)*np.array(rroi.GetSpacing())
+            t = translation - (np.array(self.rcentroids[r]) - np.array(self.dcentroids[r]))
+            a_trans = sitk.Transform(3,sitk.sitkAffine)
+            a_trans.SetParameters([1,0,0,0,1,0,0,0,1,t[0],t[1],t[2]])
+            droi = sitk.Resample(droi,droi,a_trans,sitk.sitkNearestNeighbor)
+            rroi = sitk.AntiAliasBinary(rroi)
+            droi = sitk.AntiAliasBinary(droi)
+            sitk.WriteImage(droi+rroi,'roi_overlay.nii')            
             #peform the deformable registration
             register = sitk.FastSymmetricForcesDemonsRegistrationFilter()
             register.SetNumberOfIterations(self.deformableSettings['Iterations'])
@@ -157,10 +162,6 @@ class CellMech(object):
 
             #translate displacement field to VTK regular grid
             a = sitk.GetArrayFromImage(disp_field)
-            #add initial translation
-            #a[:,:,:,0] += translation[0]
-            #a[:,:,:,1] += translation[1]
-            #a[:,:,:,2] += translation[2]
             disp = vtk.vtkImageData()
             disp.SetOrigin(rroi.GetOrigin())
             disp.SetSpacing(rroi.GetSpacing())
