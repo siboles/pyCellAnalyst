@@ -1,7 +1,9 @@
 from Tkinter import *
 from ttk import Notebook, Scrollbar
 import tkFileDialog, os, sys, itertools, webbrowser, pickle, copy, xlrd
+import time, datetime
 from pyCellAnalyst import Volume,CellMech
+import numpy as np
 
 class StdoutRedirector(object):
     def __init__(self,text_widget):
@@ -235,11 +237,11 @@ class Application(Frame):
         self.thresholdHelpFrame = LabelFrame(self.tab3,text="Description")
         self.thresholdHelpFrame.grid(row=0,column=1,padx=5,pady=5,sticky=NW)
         self.textThresholdHelp = Text(self.thresholdHelpFrame,wrap=WORD,height=11,width=40)
-        self.textThresholdHelp.insert(END,"Calculates the threshold such that entropy is maximized between the foreground and background. This has shown good performance even when objects are in close proximity.")
+        self.textThresholdHelp.insert(END,"Thresholds at a user-specified ratio of the maximum voxel intensity.")
         self.textThresholdHelp.pack(anchor=NW)
         self.textThresholdHelp["state"] = DISABLED
         self.thresholdLink = r"http://dx.doi.org/10.1016/0734-189X(85)90125-2"
-        self.thresholdReference = Label(self.thresholdHelpFrame,text="Reference",fg="blue",cursor="hand2")
+        self.thresholdReference = Label(self.thresholdHelpFrame,text="",fg="blue",cursor="hand2")
         self.thresholdReference.bind("<Button-1>",self.open_threshold_reference)
         self.thresholdReference.pack(anchor=NW)
         
@@ -731,6 +733,12 @@ class Application(Frame):
             vol.writeSurfaces()
 
     def run_kinematics(self):
+        ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H:%M:%S') #timestamp
+        pardir = os.path.dirname(self.spatialDirectories[0])
+        #uniform strain
+        ofid = open(pardir+"/Kinematics_Analysis"+ts+".csv",'w')
+        #ellipsoidal approximation
+        efid = open(pardir+"/Ellipsoidal_Analysis"+ts+".csv",'w')
         for i,d in enumerate(self.spatialDirectories):
             mech = CellMech(ref_dir=self.materialDirectory,def_dir=d,
                             deformable=self.intSettings['defReg'].get(),
@@ -738,6 +746,56 @@ class Application(Frame):
                             deformableSettings={'Iterations':self.settings['deformableIterations'].get(),
                                                 'Maximum RMS':self.settings['deformableRMS'].get(),
                                                 'Displacement Smoothing':self.settings['deformableSigma'].get()})
+
+            ofid.write(d+'/n')
+            ofid.write('Object ID, E11, E22, E33, E12, E13, E23, Volumetric, Effective, Maximum Tensile, Maximum Compressive, Maximum Shear\n')
+            if mech.ecm_strain:
+                ecm_w, ecm_v = np.linalg.eigh(mech.ecm_strain)
+                ecm_w = np.sort(ecm_w)
+                ofid.write('Tissue, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}\n'.format(mech.ecm_strain[0,0],
+                                                                                                               mech.ecm_strain[1,1],
+                                                                                                               mech.ecm_strain[2,2],
+                                                                                                               mech.ecm_strain[0,1],
+                                                                                                               mech.ecm_strain[0,2],
+                                                                                                               mech.ecm_strain[1,2],
+                                                                                                               np.linalg.det(mech.ecm_strain)-1.0,
+                                                                                                               np.sqrt((ecm_w[2]-ecm_w[1])**2+(ecm_w[1]-ecm_w[0])**2+(ecm_w[2]-ecm_w[0])**2),
+                                                                                                               ecm_w[2],
+                                                                                                               ecm_w[0],
+                                                                                                               0.5*np.abs(ecm_w[2]-ecm_w[0])))
+            for j,c in enumerate(mech.cell_strains):
+                w,v = np.linalg.eigh(c)
+                w = np.sort(w)
+                ofid.write('Cell {:d}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}\n'.format(j+1,
+                                                                                                                  c[0,0],
+                                                                                                                  c[1,1],
+                                                                                                                  c[2,2],
+                                                                                                                  c[0,1],
+                                                                                                                  c[0,2],
+                                                                                                                  c[1,2],
+                                                                                                                  mech.vstrains[j],
+                                                                                                                  np.sqrt((w[2]-w[1])**2+(w[1]-w[0])**2+(w[2]-w[0])**2),
+                                                                                                                  w[2],
+                                                                                                                  w[0],
+                                                                                                                  0.5*np.abs(w[2]-w[0])))
+            efid.write(d+'/n')
+            efid.write('Object ID, Reference Major Axis, Reference Middle Axis, Reference Minor Axis, Deformed Major Axis, Deformed Middle Axis, Deformed Minor Axis, Reference Volume, Deformed Volume\n')
+            for j, (rvol,dvol,raxes,daxes) in enumerate(zip(mech.rvols,mech.dvols,mech.raxes,mech.daxes)):
+                raxes = np.sort(raxes)
+                daxes = np.sort(daxes)
+                efid.write('Cell {:d}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}\n'.format(j+1,
+                                                                                                raxes[2],
+                                                                                                raxes[1],
+                                                                                                raxes[0],
+                                                                                                daxes[2],
+                                                                                                daxes[1],
+                                                                                                daxes[0],
+                                                                                                rvol,
+                                                                                                dvol))
+                
+
+        ofid.close()
+        efid.close()
             
     def open_smoothing_reference(self,*args):
         webbrowser.open_new(self.smoothingLink)
