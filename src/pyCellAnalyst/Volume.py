@@ -157,7 +157,7 @@ class Volume(object):
             print("\nImported 2D image {:s}".format(files[0]))
             reader.SetFileName(self._vol_dir+self._path_dlm+files[0])
             self._img = reader.Execute()
-                
+        self._img = sitk.Cast(sitk.RescaleIntensity(self._img,0,255),sitk.sitkUInt8) #temporarily force convert image to 8bit due to SimpleITK bug
         self._imgType = self._img.GetPixelIDValue()
         if self._imgType == 1:
             self._imgTypeMax = 255

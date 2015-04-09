@@ -747,7 +747,7 @@ class Application(Frame):
                                                 'Maximum RMS':self.settings['deformableRMS'].get(),
                                                 'Displacement Smoothing':self.settings['deformableSigma'].get()})
 
-            ofid.write(d+'/n')
+            ofid.write(d+'\n')
             ofid.write('Object ID, E11, E22, E33, E12, E13, E23, Volumetric, Effective, Maximum Tensile, Maximum Compressive, Maximum Shear\n')
             if mech.ecm_strain:
                 ecm_w, ecm_v = np.linalg.eigh(mech.ecm_strain)
@@ -778,7 +778,7 @@ class Application(Frame):
                                                                                                                   w[2],
                                                                                                                   w[0],
                                                                                                                   0.5*np.abs(w[2]-w[0])))
-            efid.write(d+'/n')
+            efid.write(d+'\n')
             efid.write('Object ID, Reference Major Axis, Reference Middle Axis, Reference Minor Axis, Deformed Major Axis, Deformed Middle Axis, Deformed Minor Axis, Reference Volume, Deformed Volume\n')
             for j, (rvol,dvol,raxes,daxes) in enumerate(zip(mech.rvols,mech.dvols,mech.raxes,mech.daxes)):
                 raxes = np.sort(raxes)
