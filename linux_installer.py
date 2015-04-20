@@ -80,18 +80,15 @@ try:
     import xlrd
 except ImportError:
     print("Xlrd not detected. Installing...")
-    subprocess.call("pip install scikit-learn",shell=True)
+    subprocess.call("pip install xlrd",shell=True)
 
-# Installations fetching from the web with wget
 try:
     import meshpy
 except ImportError:
-    print("MeshPy was not detected. Downloading and installing...")
-    subprocess.call("wget https://pypi.python.org/packages/source/M/MeshPy/MeshPy-2014.1.tar.gz meshpy.tar.gz", shell=True)
-    subprocess.call("tar xfz meshpy.tar.gz",shell=True)
-    subprocess.call("cd meshpy; ./configure",shell=True)
-    subprocess.call("python setup.py install",shell=True)
+    print("MeshPy was not detected. Installing...")
+    subprocess.call("pip install meshpy",shell=True)
 
+# Installations fetching from the web with wget
 try:
     import SimpleITK as sitk
     vers = sitk.Version_VersionString()
