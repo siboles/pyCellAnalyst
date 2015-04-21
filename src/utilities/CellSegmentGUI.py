@@ -37,8 +37,8 @@ class Application(Frame):
         self.settings = {'xdim':                 DoubleVar(value=0.41),
                          'ydim':                 DoubleVar(value=0.41),
                          'zdim':                 DoubleVar(value=0.3),
-                         'upsampling':           DoubleVar(value=1.0),
-                         'thresholdPercentage':  DoubleVar(value=0.4),
+                         'upsampling':           DoubleVar(value=2.0),
+                         'thresholdPercentage':  DoubleVar(value=0.55),
                          'medianRadius':         DoubleVar(value=1),
                          'gaussianSigma':        DoubleVar(value=0.5),
                          'curvatureIterations':  IntVar(value=10),
@@ -52,7 +52,7 @@ class Application(Frame):
                          'patchRadius':          IntVar(value=4),
                          'patchNumber':          IntVar(value=20),
                          'patchNoiseModel':      IntVar(value=2),
-                         'patchIterations':      IntVar(value=10),
+                         'patchIterations':      IntVar(value=5),
                          'geodesicPropagation':  DoubleVar(value=0.15),
                          'geodesicCurvature':    DoubleVar(value=0.1),
                          'geodesicAdvection':    DoubleVar(value=1.0),
@@ -73,7 +73,7 @@ class Application(Frame):
                             'handleOverlap':      IntVar(value=1),
                             'debug':              IntVar(value=0),
                             'smoothingMethod':    IntVar(value=4),
-                            'thresholdMethod':    IntVar(value=3),
+                            'thresholdMethod':    IntVar(value=1),
                             'thresholdAdaptive':  IntVar(value=1),
                             'activeMethod':       IntVar(value=2),
                             'defReg':             IntVar(value=1),
@@ -206,7 +206,13 @@ class Application(Frame):
         
         self.smoothingSettingsFrame = LabelFrame(self.tab2,text="Smoothing/Denoising Settings")
         self.smoothingSettingsFrame.grid(row=0,column=2,padx=5,pady=5,sticky=NW)
-        Label(self.smoothingSettingsFrame,text="No additional settings needed.").pack(anchor=W)
+        settings = [('Conductance','curvatureConductance'),
+                    ('Iterations','curvatureIterations')]
+
+        for t,v in settings:
+            Label(self.smoothingSettingsFrame,text=t).pack(anchor=W)
+            Entry(self.smoothingSettingsFrame,textvariable=self.settings[v]).pack(anchor=W)
+
         
         #Threshold segmentation
         self.thresholdFrame = LabelFrame(self.tab3,text="Threshold segmentation")
@@ -238,18 +244,17 @@ class Application(Frame):
         self.thresholdHelpFrame.grid(row=0,column=1,padx=5,pady=5,sticky=NW)
         self.textThresholdHelp = Text(self.thresholdHelpFrame,wrap=WORD,height=11,width=40)
         self.textThresholdHelp.insert(END,"Thresholds at a user-specified ratio of the maximum voxel intensity.")
-        self.textThresholdHelp.pack(anchor=NW)
         self.textThresholdHelp["state"] = DISABLED
-        self.thresholdLink = r"http://dx.doi.org/10.1016/0734-189X(85)90125-2"
-        self.thresholdReference = Label(self.thresholdHelpFrame,text="",fg="blue",cursor="hand2")
-        self.thresholdReference.bind("<Button-1>",self.open_threshold_reference)
-        self.thresholdReference.pack(anchor=NW)
+        self.thresholdReference = Label(self.thresholdHelpFrame,text="",fg="blue",cursor="hand2")            
+        self.textThresholdHelp.pack(anchor=NW)
+
         
         self.thresholdSettingsFrame = LabelFrame(self.tab3,text="Threshold Settings")
         self.thresholdSettingsFrame.grid(row=0,column=2,padx=5,pady=5,sticky=NW)
         Checkbutton(self.thresholdSettingsFrame,text="Iterative Threshold Adjustment",variable=self.intSettings['thresholdAdaptive']).pack(anchor=W)
-        Label(self.thresholdSettingsFrame,text="     No additional settings needed.",fg='red').pack(anchor=W)
-
+        Label(self.thresholdSettingsFrame,text="Ratio").pack(anchor=W)
+        e = Entry(self.thresholdSettingsFrame,textvariable=self.settings['thresholdPercentage'])
+        e.pack(anchor=W)
 
         #make Active Contour segmentation frame
         self.activeContourFrame = LabelFrame(self.tab3,text="Active contour segmentation")
@@ -353,6 +358,15 @@ class Application(Frame):
         if self.intSettings['smoothingMethod'].get() == 1:
             self.smoothingReference.unbind("<Button-1>")
             self.smoothingReference["text"] = ""
+        elif self.intSettings['smoothingMethod'].get() == 2:
+            self.smoothingReference.bind("<Button-1>",self.open_smoothing_reference)
+            self.smoothingReference["text"] = "Reference: page 80"
+        elif self.intSettings['smoothingMethod'].get() == 3:
+            self.smoothingReference.bind("<Button-1>",self.open_smoothing_reference)
+            self.smoothingReference["text"] = "Reference: page 96"
+        elif self.intSettings['smoothingMethod'].get() == 4:
+            self.smoothingReference.bind("<Button-1>",self.open_smoothing_reference)
+            self.smoothingReference["text"] = "Reference: page 106"            
         else:
             self.smoothingReference.bind("<Button-1>",self.open_smoothing_reference)
             self.smoothingReference["text"] = "Reference"
@@ -363,6 +377,7 @@ class Application(Frame):
             self.textSmoothingHelp.delete("0.0",END)
             self.textSmoothingHelp.insert(END,"No smoothing or denoising will be applied to the image.")
             self.textSmoothingHelp["state"] = DISABLED
+            self.smoothingLink = r""
                         
         elif self.intSettings['smoothingMethod'].get() == 2:
             settings = [('Kernel Radius','medianRadius')]
@@ -370,14 +385,15 @@ class Application(Frame):
             self.textSmoothingHelp.delete("0.0",END)
             self.textSmoothingHelp.insert(END,"Apply a median filter with the window size defined by Kernel Radius. A larger radius will result in a smoother image, but may degrade the edges.")
             self.textSmoothingHelp["state"] = DISABLED
-                        
+            self.smoothingLink = r"http://www.itk.org/ItkSoftwareGuide.pdf"                        
         elif self.intSettings['smoothingMethod'].get() == 3:
             settings = [('Gaussian Variance','gaussianSigma')]
             self.textSmoothingHelp["state"] = NORMAL
             self.textSmoothingHelp.delete("0.0",END)
             self.textSmoothingHelp.insert(END,"Apply a discrete Gaussian filter. Increasing Gaussian Variance will result in a smoother image, but will further blur edges.")
             self.textSmoothingHelp["state"] = DISABLED
-                        
+            self.smoothingLink = r"http://www.itk.org/ItkSoftwareGuide.pdf"
+            
         elif self.intSettings['smoothingMethod'].get() == 4:
             settings = [('Conductance','curvatureConductance'),
                         ('Iterations','curvatureIterations')]
@@ -447,9 +463,13 @@ class Application(Frame):
             child.destroy()
         Checkbutton(self.thresholdSettingsFrame,text="Iterative Threshold Adjustment",variable=self.intSettings['thresholdAdaptive']).pack(anchor=W)
         if self.intSettings['thresholdMethod'].get() == 1:
+            self.thresholdReference.unbind("<Button-1>")
             self.thresholdReference['text'] = ""
         else:
+
             self.thresholdReference['text'] = "Reference"
+            self.thresholdReference.bind("<Button-1>",self.open_threshold_reference)
+            self.thresholdReference.pack(anchor=NW)
             
         if self.intSettings['thresholdMethod'].get() == 1:
             self.textThresholdHelp["state"] = NORMAL
@@ -537,12 +557,19 @@ class Application(Frame):
             child.destroy()
         if self.intSettings['activeMethod'].get() == 1:
             Label(self.activeSettingsFrame,text="No additional settings needed.").pack(anchor=W)
+            self.textActiveHelp["state"] = NORMAL
+            self.textActiveHelp.delete("0.0",END)
+            self.textActiveHelp.insert(END,"Only a threshold-based segmentation will be performed.")
+            self.textActiveHelp["state"] = DISABLED
+            self.activeReference["text"] = ""
+            self.activeLink = ""
         elif self.intSettings['activeMethod'].get() == 2:
             self.textActiveHelp["state"] = NORMAL
             self.textActiveHelp.delete("0.0",END)
             self.textActiveHelp.insert(END,"Segments object using a geodesic active contour levelset algorithm. Propagation is the contour inflation force (deflation if negative); higher values result in skipping weaker edges or small islands of contrast change. Curvature governs how smooth the contour will be; higher values result in smoother. Advection causes the contour to attract to edges; higher values help prevent leakage. Iterations are the maximum iterations to take. Maximum RMS Error Change is the change in RMS at which iterations will terminate if Iterations has not yet been reached.")
             self.textActiveHelp.pack(anchor=NW)
             self.textActiveHelp["state"] = DISABLED
+            self.activeReference["text"] = "Reference"
             self.activeLink = r"http://dx.doi.org/10.1023/A:1007979827043"
             settings = [('Propagation','geodesicPropagation'),
                         ('Curvature','geodesicCurvature'),
@@ -558,6 +585,7 @@ class Application(Frame):
             self.textActiveHelp.insert(END,"An active contour model that requires no edge information. This algorithm employs a convex objective function and is therefore, very robust. Unfortunately, there is only a single phase implementation in SimpleITK, so this tends to have trouble with objects in close proximity. If a multiphase version is released in the future, this will be the ideal approach to segment close or touching objects. The contour is evolved iteratively using curvature flow. Lambda1 and Lambda2 are energy term weights for voxels inside and outside the contour, respectively. A strategy to help resolve close objects is to slightly increase Lambda1, penalizing voxels inside the contour.")
             self.textActiveHelp.pack(anchor=NW)
             self.textActiveHelp["state"] = DISABLED
+            self.activeReference["text"] = "Reference"
             self.activeLink = r"http://dx.doi.org/10.1109/83.902291"
             settings = [('Lambda1 (internal weight)','edgeLambda1'),
                         ('Lambda2 (external weight)','edgeLambda2'),
@@ -708,6 +736,7 @@ class Application(Frame):
                          stretch=              self.intSettings['contrastStretching'].get(),
                          enhance_edge =        self.intSettings['edgeEnhancement'].get(),
                          smoothing_method=     self.smoothingMethods[self.intSettings['smoothingMethod'].get()-1],
+                         debug =               self.intSettings['debug'].get(),
                          smoothing_parameters= smoothingParameters)
                         
             if self.intSettings['activeMethod'].get() == 1:
