@@ -1,3 +1,8 @@
+
+# Change this to point to your FEBio executable
+FEBIO_BIN = "/home/scott/febio-2.0/bin/febio2.lnx64"
+
+# DO NOT EDIT BELOW HERE
 import febio, pickle, string, subprocess, os, tkFileDialog, platform, fnmatch, itertools
 import time, datetime, vtk
 from vtk.util import numpy_support
@@ -171,7 +176,7 @@ class Application(Frame):
 
             model.writeModel()
 
-            subprocess.call("/home/scott/febio-2.0/bin/febio2.lnx64 -i "+modelname,shell=True)
+            subprocess.call(FEBIO_BIN+" -i "+modelname,shell=True)
 
     def analyzeResults(self):
         self.matched = [] # for paired comparisons
@@ -273,7 +278,7 @@ class Application(Frame):
             top_dir = self.pickles[0].rsplit('\\',2)[0]+'\\'
         else:
             top_dir = self.pickles[0].rsplit('/',2)[0]+'/'
-        output_dir = top_dir+'FEA_analysis_' + datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H:%M:%S')
+        output_dir = top_dir+'FEA_analysis_' + datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S')
         os.mkdir(output_dir)
         for output in self.histograms.keys():
             if self.histograms[output]:

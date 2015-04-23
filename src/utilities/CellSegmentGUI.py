@@ -762,7 +762,7 @@ class Application(Frame):
             vol.writeSurfaces()
 
     def run_kinematics(self):
-        ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H:%M:%S') #timestamp
+        ts = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d_%H-%M-%S') #timestamp
         pardir = os.path.dirname(self.spatialDirectories[0])
         #uniform strain
         ofid = open(pardir+"/Kinematics_Analysis"+ts+".csv",'w')
