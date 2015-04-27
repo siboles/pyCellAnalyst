@@ -135,28 +135,38 @@ class Volume(object):
 
     def _parseStack(self):
         reader = sitk.ImageFileReader()
-        files = fnmatch.filter(sorted(os.listdir(self._vol_dir)),'*.tif')
-        if len(files) > 1:
-            counter = [re.search("[0-9]*\.tif",f).group() for f in files]
-            for i,c in enumerate(counter):
-                counter[i] = int(c.replace('.tif',''))
-            files = np.array(files,dtype=object)
-            sorter = np.argsort(counter)
-            files = files[sorter]
-            img = []
-            for fname in files:
-                reader.SetFileName(self._vol_dir+self._path_dlm+fname)
-                im = reader.Execute()
-                if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
-                    img.append(sitk.VectorMagnitude(im))
-                else:
-                    img.append(im)
-            self._img = sitk.JoinSeries(img)
-            print("\nImported 3D image stack ranging from {:s} to {:s}".format(files[0],files[-1]))
-        else:
-            print("\nImported 2D image {:s}".format(files[0]))
-            reader.SetFileName(self._vol_dir+self._path_dlm+files[0])
-            self._img = reader.Execute()
+        for ftype in ['*.nii','*.tif*']:
+            files = fnmatch.filter(sorted(os.listdir(self._vol_dir)),ftype)
+            if len(files) > 0:
+                break
+
+        if ftype == "*.tif*":
+            if len(files) > 1:
+                counter = [re.search("[0-9]*\.tif",f).group() for f in files]
+                for i,c in enumerate(counter):
+                    counter[i] = int(c.replace('.tif',''))
+                files = np.array(files,dtype=object)
+                sorter = np.argsort(counter)
+                files = files[sorter]
+                img = []
+                for fname in files:
+                    reader.SetFileName(self._vol_dir+self._path_dlm+fname)
+                    im = reader.Execute()
+                    if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
+                        img.append(sitk.VectorMagnitude(im))
+                    else:
+                        img.append(im)
+                self._img = sitk.JoinSeries(img)
+                print("\nImported 3D image stack ranging from {:s} to {:s}".format(files[0],files[-1]))
+            else:
+                print("\nImported 2D image {:s}".format(files[0]))
+                reader.SetFileName(self._vol_dir+self._path_dlm+files[0])
+                self._img = reader.Execute()
+        elif ftype == "*.nii":
+            im = sitk.ReadImage(self._vol_dir+self._path_dlm+files[0])
+            if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
+                im = sitk.VectorMagnitude(im)
+            self._img = im
         self._img = sitk.Cast(sitk.RescaleIntensity(self._img,0,255),sitk.sitkUInt8) #temporarily force convert image to 8bit due to SimpleITK bug
         self._imgType = self._img.GetPixelIDValue()
         if self._imgType == 1:
