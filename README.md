@@ -41,7 +41,7 @@ Linux
 On Ubuntu 14 or later (other flavours may differ) in a command terminal:
 
     cd /etc/ld.so.conf.d
-    sudo echo "$/usr/lib/VTK-6.2.0-Linux-64bit/lib" > vtk.conf
+    sudo echo "/usr/lib/VTK-6.2.0-Linux-64bit/lib" > vtk.conf
     sudo ldconfig
 
 Alternatively, packages can be individually retrieved and installed. The list of dependencies is:
