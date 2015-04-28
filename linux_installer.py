@@ -101,6 +101,7 @@ try:
         else:
             subprocess.call("wget http://sourceforge.net/projects/simpleitk/files/SimpleITK/0.9b01/Python/SimpleITK-0.9.0b01-py2.7-linux-i686.egg/download -O simple_itk.egg", shell=True)
             subprocess.call("easy_install simple_itk.egg",shell=True)
+        os.remove("simple_itk.egg")
     
 except ImportError:
     print("SimpleITK was not detected. Downloading and installing...")
@@ -110,6 +111,7 @@ except ImportError:
     else:
         subprocess.call("wget http://sourceforge.net/projects/simpleitk/files/SimpleITK/0.9b01/Python/SimpleITK-0.9.0b01-py2.7-linux-i686.egg/download -O simple_itk.egg", shell=True)
         subprocess.call("easy_install simple_itk.egg",shell=True)
+    os.remove("simple_itk.egg")
 
 try:
     import vtk
@@ -119,8 +121,9 @@ try:
         if arch =='64':
             print("Downloading...")
             subprocess.call("wget http://www.vtk.org/files/release/6.2/vtkpython-6.2.0-Linux-64bit.tar.gz -O vtk_python.tar.gz",shell=True)
-            subprocess.call("tar -zxvf vtk_python.tar.gz",shell=True)
-            print("Downloaded and extracted in current directory. Please consult installation instructions to proceed.")
+            subprocess.call("tar -zxvf vtk_python.tar.gz -C /usr/lib",shell=True)
+            os.remove("vtk_python.tar.gz")
+            print("Downloaded and extracted to /usr/lib. Please consult installation instructions to link libraries.")
         else:
             print("WARNING: A 32 bit binary of VTK is not available for Linux. Sorry, but you will have to build it from source.")        
 except ImportError:
@@ -128,8 +131,11 @@ except ImportError:
     if arch =='64':
         print("Downloading...")
         subprocess.call("wget http://www.vtk.org/files/release/6.2/vtkpython-6.2.0-Linux-64bit.tar.gz -O vtk_python.tar.gz",shell=True)
-        subprocess.call("tar -zxvf vtk_python.tar.gz",shell=True)
-        print("Downloaded and extracted in current directory. Please consult installation instructions to proceed.")
+        subprocess.call("tar -zxvf vtk_python.tar.gz -C /usr/lib",shell=True)
+        subprocess.call("echo export PYTHONPATH=$PYTHONPATH:/usr/lib/VTK-6.2.0-Linux-64bit/lib/python2.7/site-packages",shell=True)
+        subprocess.call("source ~/.profile")
+        os.remove("vtk_python.tar.gz")
+        print("Downloaded and extracted to /usr/lib. Please consult installation instructions to link libraries.")
     else:
         print("WARNING: A 32 bit binary of VTK is not available for Linux. Sorry, but you will have to build it from source.")
         
