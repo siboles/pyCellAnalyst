@@ -86,12 +86,14 @@ class Volume(object):
         self.stretch = stretch
         self.enhance_edge = enhance_edge
         self.debug = debug
-        if self.debug:
-            for p in ['seed*.nii','smoothed*.nii','edge*.nii']:
-                files = fnmatch.filter(os.listdir(self._output_dir),p)
-                for f in files:
-                    os.remove(self._output_dir+self._path_dlm+f)
-                
+        try:
+            if self.debug:
+                for p in ['seed*.nii','smoothed*.nii','edge*.nii']:
+                    files = fnmatch.filter(os.listdir(self._output_dir),p)
+                    for f in files:
+                        os.remove(self._output_dir+self._path_dlm+f)
+        except:
+            pass
         self.fillholes = fillholes
         # read in the TIFF stack        
         self._parseStack()
@@ -428,8 +430,18 @@ class Volume(object):
                     #Get connected regions
                     r = sitk.ConnectedComponent(seg)
                     labelstats = self._getLabelShape(r)
-                    label = np.argmax(labelstats['volume'])+1
+                    d = 1e7
+                    region_cent = np.array(list(seg.GetSize()),float)/2.0
+                    region_cent *= np.array(self._pixel_dim) 
+                    region_cent += np.array(list(seg.GetOrigin()),float)
+                    for l,c in enumerate(labelstats['centroid']):
+                        dist = np.linalg.norm(np.array(c,float)-region_cent)
+                        if dist < d:
+                            d = dist
+                            label = l+1
                     bb = labelstats['bounding box'][label-1]
+                    vol = labelstats['volume'][label-1]
+                    cent = labelstats['centroid'][label-1]
                     if dimension == 3:
                         label_bounds = [(bb[0],bb[0]+bb[3]),(bb[1],bb[1]+bb[4])]
                     else:
@@ -444,8 +456,22 @@ class Volume(object):
                             seg = sitk.BinaryThreshold(simg,0,int(newt))
                     else:
                         break
-                if not(newt == t):
-                    print("... ... Adjusted the threshold to: {:d}".format(int(newt)))
+                if vol/np.prod(self._pixel_dim) < 8:
+                    tmp = np.zeros(seg.GetSize(),np.uint8)
+                    tmp_cent = np.array(tmp.shape,dtype=np.uint32)/2
+                    r = np.arange(-2,3)**2
+                    dist2 = r[:,None,None] + r[:, None] + r
+                    dist2 = dist2<=4
+                    tmp[tmp_cent[0]-2:tmp_cent[0]+3,tmp_cent[1]-2:tmp_cent[1]+3,tmp_cent[2]-2:tmp_cent[2]+3] = dist2
+                    tmp = sitk.GetImageFromArray(tmp)
+                    tmp.SetSpacing(seg.GetSpacing())
+                    tmp.SetOrigin(seg.GetOrigin())
+                    tmp.SetDirection(seg.GetDirection())
+                    seg = tmp
+                    print("... ... Threshold failed to separate objects. A sphere with radius=2 will serve as seed for active contour segmentation.\nIf an active contour method is not selected, please restart and do so.") 
+                else:
+                    if not(newt == t):
+                        print("... ... Adjusted the threshold to: {:d}".format(int(newt)))
             else:
                 #Opening (Erosion/Dilation) step to remove islands smaller than 1 voxels in radius)
                 seg = sitk.BinaryMorphologicalOpening(seg,1)
@@ -454,8 +480,16 @@ class Volume(object):
                 #Get connected regions
                 r = sitk.ConnectedComponent(seg)
                 labelstats = self._getLabelShape(r)
-                label = np.argmax(labelstats['volume'])+1
-                
+                d = 1e7
+                region_cent = np.array(list(seg.GetSize()),float)/2.0
+                region_cent *= np.array(self._pixel_dim)
+                region_cent += np.array(list(seg.GetOrigin()),float)
+                for l,c in enumerate(labelstats['centroid']):
+                    dist = np.linalg.norm(np.array(c,float)-region_cent)
+                    if dist < d:
+                        d = dist
+                        label = l+1
+                    
             tmp = sitk.Image(self._img.GetSize(),self._imgType)
             tmp.SetSpacing(self._img.GetSpacing())
             tmp.SetOrigin(self._img.GetOrigin())

@@ -5,14 +5,6 @@ import time, datetime
 from pyCellAnalyst import Volume,CellMech
 import numpy as np
 
-class StdoutRedirector(object):
-    def __init__(self,text_widget):
-        self.text_space = text_widget
-
-    def write(self,string):
-        self.text_space.insert('end', string)
-        self.text_space.see('end')
-        
 class Application(Frame):
     """ This is a GUI for the pyCellAnalyst Segmentation Feature """
     def __init__(self,master):
@@ -167,11 +159,6 @@ class Application(Frame):
         self.buttonExecute["command"] = self.run_segmentation
         self.buttonExecute.grid(row=7,column=0,columnspan=5,padx=5,pady=5,sticky=W+E)
         
-        #print STDOUT to a textbox
-        self.text_box = Text(self.tab1,height=10)
-        self.text_box.grid(row=8,column=0,columnspan=5,padx=5,pady=5,sticky=W+E)
-        sys.stdout = StdoutRedirector(self.text_box)
-
         #smoothing/denoising
         methods = [("None",1),
                    ("Median",2),
