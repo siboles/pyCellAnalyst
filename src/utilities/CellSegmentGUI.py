@@ -59,6 +59,7 @@ class Application(Frame):
         
         self.intSettings = {'stain':              IntVar(value=0),
                             'display':            IntVar(value=1),
+                            'removeBright':       IntVar(value=0),
                             'edgeEnhancement':    IntVar(value=0),
                             'contrastStretching': IntVar(value=0),
                             'fillHoles':          IntVar(value=0),
@@ -144,6 +145,7 @@ class Application(Frame):
         self.otherSettingsFrame = LabelFrame(self.tab1,text="Other Options")
         self.otherSettingsFrame.grid(row=6,column=0,columnspan=5,padx=5,pady=5,sticky=E+W)
         settings = [('Display Objects','display'),
+                    ('Remove Bright Spots','removeBright'),
                     ('Edge Enhancement','edgeEnhancement'),
                     ('2D Contrast Stretching','contrastStretching'),
                     ('Fill Holes','fillHoles'),
@@ -721,6 +723,7 @@ class Application(Frame):
                          display=              self.intSettings['display'].get(),
                          stain=                objects[self.intSettings['stain'].get()],
                          stretch=              self.intSettings['contrastStretching'].get(),
+                         bright=               self.intSettings['removeBright'].get(),
                          enhance_edge =        self.intSettings['edgeEnhancement'].get(),
                          smoothing_method=     self.smoothingMethods[self.intSettings['smoothingMethod'].get()-1],
                          debug =               self.intSettings['debug'].get(),

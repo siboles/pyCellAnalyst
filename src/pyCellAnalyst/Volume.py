@@ -21,7 +21,7 @@ class Volume(object):
         dimensions   List containing the ellipsoid axis lengths of segmented objects.
         orientations List containing the basis vectors of ellipsoid axes. Same order as dimensions.
     """
-    def __init__(self,vol_dir,output_dir=None,regions=None,pixel_dim=[0.411,0.411,0.6835],stain='Foreground',segmentation='Geodesic',smoothing_method='Curvature Diffusion',smoothing_parameters={},stretch=False,enhance_edge=False,display=True,handle_overlap=True,debug=False,fillholes=True):
+    def __init__(self,vol_dir,output_dir=None,regions=None,pixel_dim=[0.411,0.411,0.6835],stain='Foreground',segmentation='Geodesic',smoothing_method='Curvature Diffusion',smoothing_parameters={},stretch=False,bright=False,enhance_edge=False,display=True,handle_overlap=True,debug=False,fillholes=True):
         """
         INPUTS
         vol_dir              TYPE: string. This is required. Currently it is the path to a directory containing a stack of TIFF images. Other formats may be supported in the future.
@@ -44,6 +44,7 @@ class Volume(object):
                              'Bilateral':           {'domainSigma': 1.5, 'rangeSigma': 5.0, 'samples': 100}
                              'Patch-based':         {'radius':4, 'iterations':10, 'patches':20, 'noise model': 'poisson'}
         stretch              TYPE: Boolean. Whether to do contrast stretching of 2D slices in regions of interest after to smoothing.
+        bright               TYPE: Boolean. Whether to replace voxels higher than 98 percentile intensity with median value (radius 6)
         enhance_edge         TYPE: Boolean. Whether to enhance the edges with Laplacian sharpening
         display              TYPE: Boolean. Spawn a window to render the cells or not.
         handle_overlap       TYPE: Boolean. If labelled objects overlap, employs Support Vector Machines to classify the shared voxels.
@@ -84,6 +85,7 @@ class Volume(object):
         self.smoothing_method = smoothing_method
         self.smoothing_parameters = smoothing_parameters
         self.stretch = stretch
+        self.bright = bright
         self.enhance_edge = enhance_edge
         self.debug = debug
         try:
@@ -182,6 +184,7 @@ class Volume(object):
 
         self._img = sitk.Cast(self._img,self._imgType)
         self._img.SetSpacing(self._pixel_dim)
+            
 
     def equalize2D(self,img):
         maxt = self._getMinMax(img)[1]
@@ -352,6 +355,16 @@ class Volume(object):
                 roi = sitk.RegionOfInterest(self._img,region[3:],region[0:3])
             else:
                 roi = sitk.RegionOfInterest(self._img,region[2:],region[0:2])
+            if self.bright:
+                a = sitk.GetArrayFromImage(roi)
+                b = sitk.GetArrayFromImage(sitk.Median(roi,(6,6,6)))
+                top = np.percentile(a.ravel(),98)
+                a[a>top] = b[a>top] #replace only voxels in 98th or higher percentile with median smoothed value
+                a = sitk.GetImageFromArray(a)
+                a.SetSpacing(roi.GetSpacing())
+                a.SetOrigin(roi.GetOrigin())
+                a.SetDirection(roi.GetDirection())
+                roi = a
             simg = self.smoothRegion(roi)
             if self.debug:
                 sitk.WriteImage(sitk.Cast(simg,self._imgType),self._output_dir+self._path_dlm+"smoothed_{:03d}.nii".format(i+1))
@@ -796,8 +809,15 @@ class Volume(object):
         #create and write the STLs
         stl = vtk.vtkSTLWriter()
         for i,c in enumerate(self._regions):
-            smoothlabel = sitk.BinaryMorphologicalClosing(self.cells==(i+1),3)
+
+            resampler = sitk.ResampleImageFilter()
+            resampler.SetReferenceImage(self.cells)
+            resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+            roi = sitk.RegionOfInterest(self.cells==(i+1),c[3:],c[0:3])
+            smoothlabel = sitk.BinaryMorphologicalClosing(roi,3)
             smoothlabel = sitk.AntiAliasBinary(smoothlabel)
+            smoothlabel = resampler.Execute(smoothlabel)            
+            
             a = vti.vtkImageImportFromArray()
             a.SetDataSpacing([self._pixel_dim[0],self._pixel_dim[1],self._pixel_dim[2]])
             a.SetDataExtent([0,100,0,100,0,self._img.GetSize()[2]])
@@ -824,6 +844,7 @@ class Volume(object):
             smooth.SetNumberOfIterations(100)
             smooth.SetInputConnection(triangles.GetOutputPort())
             smooth.Update()
+
             self.surfaces.append(smooth.GetOutput())
             
             filename = 'cell{:02d}.stl'.format(i+1)
