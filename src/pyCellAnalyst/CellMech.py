@@ -251,7 +251,7 @@ class CellMech(object):
         if rc.shape[0] < 4:
             print("WARNING: There are less than 4 objects in the space; therefore, tissue strain was not calculated.")
             return
-        da = numpy_support.numpy_to_vtk(rc)
+        da = vti.numpy_to_vtk(rc)
         p = vtk.vtkPoints()
         p.SetData(da)
         pd = vtk.vtkPolyData()
@@ -264,7 +264,7 @@ class CellMech(object):
         quality.SetInputData(tet.GetOutput())
         quality.Update()
         mq = quality.GetOutput().GetCellData().GetArray("Quality")
-        mq = numpy_support.vtk_to_numpy(mq)
+        mq = vti.vtk_to_numpy(mq)
         try:
             btet = np.argmin(abs(mq-1.0)) # tet with edge ratio closest to 1
         except:

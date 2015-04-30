@@ -765,7 +765,7 @@ class Application(Frame):
 
             ofid.write(d+'\n')
             ofid.write('Object ID, E11, E22, E33, E12, E13, E23, Volumetric, Effective, Maximum Tensile, Maximum Compressive, Maximum Shear\n')
-            if mech.ecm_strain:
+            if np.any(mech.ecm_strain):
                 ecm_w, ecm_v = np.linalg.eigh(mech.ecm_strain)
                 ecm_w = np.sort(ecm_w)
                 ofid.write('Tissue, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}\n'.format(mech.ecm_strain[0,0],
