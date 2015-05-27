@@ -687,7 +687,9 @@ class Volume(object):
                              upsampling=2,
                              seed_method='Percentage',
                              ratio=0.7,
-                             canny_variance=(0.5, 0.5, 0.5),
+                             canny_variance=(0.05, 0.05, 0.05),
+                             cannyUpper=0.0,
+                             cannyLower=0.0,
                              propagation=0.3,
                              curvature=0.1,
                              advection=1.0,
@@ -730,6 +732,10 @@ class Volume(object):
 
         canny_variance    TYPE: [float, float, float].
                           Variance for canny edge detection.
+
+        cannyUpper        TYPE: float. Upper threshold for Canny edge detector.
+
+        cannyLower        TYPE: float. Lower threshold for Canny edge detector.
 
         propagation       TYPE: float. Weight for propagation term in active
                           contour functional.
@@ -810,11 +816,12 @@ class Volume(object):
             seed = sitk.BinaryThreshold(seed, 0.5, 1e7)
             #Smooth the resampled image
             simg = self.smoothRegion(rimg)
-            #Get the image gradient magnitude
             canny = sitk.CannyEdgeDetection(
-                sitk.RescaleIntensity(
-                    sitk.Cast(rimg, sitk.sitkFloat32), 0, 1),
+                sitk.Cast(simg, sitk.sitkFloat32),
+                lowerThreshold=cannyLower,
+                upperThreshold=cannyUpper,
                 variance=canny_variance)
+
             canny = sitk.InvertIntensity(canny, 1)
             canny = sitk.Cast(canny, sitk.sitkFloat32)
             if self.debug:
@@ -1160,7 +1167,7 @@ class Volume(object):
             #to position the camera to look at the data in this direction.
             aCamera = vtk.vtkCamera()
             aCamera.SetViewUp(0, 0, -1)
-            aCamera.SetPosition(0, 1, 0)
+            aCamera.SetPosition(0, 1, 1)
             aCamera.SetFocalPoint(0, 0, 0)
             aCamera.ComputeViewPlaneNormal()
 
@@ -1217,6 +1224,19 @@ class Volume(object):
 
             iren.Initialize()
             iren.Start()
+
+            windowToImageFilter = vtk.vtkWindowToImageFilter()
+            windowToImageFilter.SetInput(renWin)
+            windowToImageFilter.SetMagnification(3)
+            windowToImageFilter.SetInputBufferTypeToRGBA()
+            windowToImageFilter.ReadFrontBufferOff()
+            windowToImageFilter.Update()
+
+            pngWriter = vtk.vtkPNGWriter()
+            pngWriter.SetFileName(
+                self._output_dir + self._path_dlm + "cells.png")
+            pngWriter.SetInputConnection(windowToImageFilter.GetOutputPort())
+            pngWriter.Write()
 
     def writeLabels(self):
         sitk.WriteImage(self.cells,

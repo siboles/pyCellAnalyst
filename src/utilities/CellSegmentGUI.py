@@ -37,7 +37,7 @@ class Application(Frame):
                          'zdim': DoubleVar(value=0.3),
                          'upsampling': DoubleVar(value=2.0),
                          'thresholdPercentage': DoubleVar(value=0.55),
-                         'medianRadius': DoubleVar(value=1),
+                         'medianRadius': IntVar(value=1),
                          'gaussianSigma': DoubleVar(value=0.5),
                          'curvatureIterations': IntVar(value=10),
                          'curvatureConductance': DoubleVar(value=9.0),
@@ -51,6 +51,9 @@ class Application(Frame):
                          'patchNumber': IntVar(value=20),
                          'patchNoiseModel': IntVar(value=2),
                          'patchIterations': IntVar(value=5),
+                         'geodesicCannyVariance': DoubleVar(value=0.1),
+                         'geodesicCannyUpper': DoubleVar(value=0.0),
+                         'geodesicCannyLower': DoubleVar(value=0.0),
                          'geodesicPropagation': DoubleVar(value=0.15),
                          'geodesicCurvature': DoubleVar(value=0.1),
                          'geodesicAdvection': DoubleVar(value=1.0),
@@ -327,6 +330,13 @@ class Application(Frame):
                                    wrap=WORD, height=11, width=40)
         self.textActiveHelp.insert(END, ("Segments object using a geodesic "
                                          "active contour levelset algorithm. "
+                                         "Uses the Canny edge detector; Canny"
+                                         "Variance governs degree of Gaussian"
+                                         " smoothing of edge detector. Upper"
+                                         "Threshold will guarantee detection "
+                                         "of edges with intensity greater than"
+                                         " setting. LowerThreshold will disca"
+                                         "rd intensities lower than setting. "
                                          "Propagation is the contour inflation"
                                          " force (deflation if negative); "
                                          "higher values result in skipping "
@@ -369,11 +379,15 @@ class Application(Frame):
                                               text="Active Contour Settings")
         self.activeSettingsFrame.grid(row=1, column=2,
                                       padx=5, pady=5, sticky=NW)
-        settings = [('Propagation', 'geodesicPropagation'),
+        settings = [('CannyVariance', 'geodesicCannyVariance'),
+                    ('UpperThreshold', 'geodesicCannyUpper'),
+                    ('LowerThreshold', 'geodesicCannyLower'),
+                    ('Propagation', 'geodesicPropagation'),
                     ('Curvature', 'geodesicCurvature'),
                     ('Advection', 'geodesicAdvection'),
                     ('Iterations', 'geodesicIterations'),
                     ('Maximum RMS Error Change', 'geodesicRMS')]
+
         for t, v in settings:
             Label(self.activeSettingsFrame, text=t).pack(anchor=W)
             Entry(self.activeSettingsFrame,
@@ -897,31 +911,39 @@ class Application(Frame):
         elif self.intSettings['activeMethod'].get() == 2:
             self.textActiveHelp["state"] = NORMAL
             self.textActiveHelp.delete("0.0", END)
-            self.textActiveHelp.insert(END, ("Segments object using a geodesic"
-                                             " active contour levelset "
-                                             "algorithm. Propagation is the"
-                                             " contour inflation force "
-                                             "(deflation if negative); higher"
-                                             " values result in skipping "
-                                             "weaker edges or small islands of"
-                                             " contrast change. Curvature "
-                                             "governs how smooth the contour "
-                                             "will be; higher values result "
-                                             "in smoother. Advection causes "
-                                             "the contour to attract to edges;"
-                                             " higher values help prevent "
-                                             "leakage. Iterations are the "
-                                             "maximum iterations to take. "
-                                             "Maximum RMS Error Change is "
-                                             "the change in RMS at which "
-                                             "iterations will terminate if "
-                                             "Iterations has not yet been "
-                                             "reached."))
+            self.textActiveHelp.insert(END,
+                                       ("Segments object using a geodesic "
+                                        "active contour levelset algorithm. "
+                                        "Uses the Canny edge detector; Canny"
+                                        "Variance governs degree of Gaussian"
+                                        " smoothing of edge detector. Upper"
+                                        "Threshold will guarantee detection "
+                                        "of edges with intensity greater than"
+                                        " setting. LowerThreshold will disca"
+                                        "rd intensities lower than setting. "
+                                        "Propagation is the contour inflation"
+                                        " force (deflation if negative); "
+                                        "higher values result in skipping "
+                                        "weaker edges or small islands of "
+                                        "contrast change. Curvature governs "
+                                        "how smooth the contour will be; "
+                                        "higher values result in smoother. "
+                                        "Advection causes the contour to "
+                                        "attract to edges; higher values "
+                                        "help prevent leakage. Iterations "
+                                        "are the maximum iterations to take."
+                                        " Maximum RMS Error Change is the "
+                                        "change in RMS at which iterations "
+                                        "will terminate if Iterations has "
+                                        "not yet been reached."))
             self.textActiveHelp.pack(anchor=NW)
             self.textActiveHelp["state"] = DISABLED
             self.activeReference["text"] = "Reference"
             self.activeLink = r"http://dx.doi.org/10.1023/A:1007979827043"
-            settings = [('Propagation', 'geodesicPropagation'),
+            settings = [('CannyVariance', 'geodesicCannyVariance'),
+                        ('UpperThreshold', 'geodesicCannyUpper'),
+                        ('LowerThreshold', 'geodesicCannyLower'),
+                        ('Propagation', 'geodesicPropagation'),
                         ('Curvature', 'geodesicCurvature'),
                         ('Advection', 'geodesicAdvection'),
                         ('Iterations', 'geodesicIterations'),
@@ -1097,7 +1119,7 @@ class Application(Frame):
             smoothingParameters = {}
         elif self.intSettings['smoothingMethod'].get() == 2:
             smoothingParameters = {
-                'radius': self.settings['medianRadius'].get()}
+                'radius': (self.settings['medianRadius'].get(),) * 3}
         elif self.intSettings['smoothingMethod'].get() == 3:
             smoothingParameters = {
                 'sigma': self.settings['gaussianSigma'].get()}
@@ -1158,7 +1180,7 @@ class Application(Frame):
                     seed_method=self.thresholdMethods[self.intSettings[
                         'thresholdMethod'].get() - 1],
                     ratio=self.settings['thresholdPercentage'].get(),
-                    canny_variance=(1.5, 1.5, 1.5),
+                    canny_variance=(0.0, 0.0, 0.0),
                     propagation=self.settings['geodesicPropagation'].get(),
                     curvature=self.settings['geodesicCurvature'].get(),
                     advection=self.settings['geodesicAdvection'].get(),
