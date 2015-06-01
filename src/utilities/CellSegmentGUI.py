@@ -1180,7 +1180,10 @@ class Application(Frame):
                     seed_method=self.thresholdMethods[self.intSettings[
                         'thresholdMethod'].get() - 1],
                     ratio=self.settings['thresholdPercentage'].get(),
-                    canny_variance=(0.0, 0.0, 0.0),
+                    canny_variance=(self.settings['geodesicCannyVariance']
+                                    .get(),) * 3,
+                    cannyUpper=self.settings['geodesicCannyUpper'].get(),
+                    cannyLower=self.settings['geodesicCannyLower'].get(),
                     propagation=self.settings['geodesicPropagation'].get(),
                     curvature=self.settings['geodesicCurvature'].get(),
                     advection=self.settings['geodesicAdvection'].get(),
