@@ -182,9 +182,9 @@ class Volume(object):
         # if regions are not specified, assume there is only one cell
         # and default to whole image
         if regions is None:
-            self._regions = [map(int,
-                                 list(self._img.GetOrigin())) +
-                             list(self._img.GetSize())]
+            coords = np.array(self._img.GetOrigin(), int)
+            size = np.array(self._img.GetSize(), int) - 1 + coords
+            self._regions = [list(coords) + list(size)]
         else:
             self._regions = regions
 
