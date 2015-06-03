@@ -182,9 +182,8 @@ class Volume(object):
         # if regions are not specified, assume there is only one cell
         # and default to whole image
         if regions is None:
-            coords = np.array(self._img.GetOrigin(), int)
-            size = np.array(self._img.GetSize(), int) - 1 + coords
-            self._regions = [list(coords) + list(size)]
+            size = np.array(self._img.GetSize(), int) - 1
+            self._regions = [[0, 0, 0] + list(size)]
         else:
             self._regions = regions
 
@@ -672,6 +671,7 @@ class Volume(object):
     def geodesicSegmentation(self,
                              upsampling=2,
                              seed_method='Percentage',
+                             adaptive=True,
                              ratio=0.7,
                              canny_variance=(0.05, 0.05, 0.05),
                              cannyUpper=0.0,
@@ -713,6 +713,8 @@ class Volume(object):
                           'Yen'
                           'RenyiEntropy'
                           'Shanbhag'
+        adaptive          TYPE: Boolean. If true will adaptively adjust
+                          threshold
         ratio             TYPE: float. The ratio to use with 'Percentage' seed
                           method. This plays no role with other seed methods.
 
@@ -737,7 +739,8 @@ class Volume(object):
         active_iterations TYPE: integer. The maximum number of iterations the
                           active contour will conduct.
         """
-        self.thresholdSegmentation(method=seed_method, ratio=ratio)
+        self.thresholdSegmentation(method=seed_method, ratio=ratio,
+                                   adaptive=adaptive)
         dimension = self._img.GetDimension()
         newcells = sitk.Image(self.cells.GetSize(), self._imgType)
         newcells.SetSpacing(self.cells.GetSpacing())
@@ -860,6 +863,7 @@ class Volume(object):
     def edgeFreeSegmentation(self,
                              upsampling=2,
                              seed_method='Percentage',
+                             adaptive=True,
                              ratio=0.4,
                              lambda1=1.0,
                              lambda2=1.1,
@@ -898,6 +902,8 @@ class Volume(object):
                     'Yen'
                     'RenyiEntropy'
                     'Shanbhag'
+        adaptive    TYPE: Boolean. If true will adaptively adjust seed
+                    threshold.
         ratio       TYPE: float. The ratio to use with 'Percentage'
                     seed method. This plays no role with other seed methods.
 
@@ -909,7 +915,8 @@ class Volume(object):
         iterations  TYPE: integer. The number of iterations the active
                     contour method will conduct.
         """
-        self.thresholdSegmentation(method=seed_method, ratio=ratio)
+        self.thresholdSegmentation(method=seed_method, ratio=ratio,
+                                   adaptive=adaptive)
         dimension = self._img.GetDimension()
         newcells = sitk.Image(self.cells.GetSize(), self._imgType)
         newcells.SetSpacing(self.cells.GetSpacing())

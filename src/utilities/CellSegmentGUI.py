@@ -1148,7 +1148,10 @@ class Application(Frame):
 
         objects = ['Foreground', 'Background']
         for i, d in enumerate(self.directories):
-            regions = self.ROI[i]
+            try:
+                regions = self.ROI[i]
+            except:
+                regions = None
             vol = Volume(d,
                          pixel_dim=[self.settings['xdim'].get(),
                                     self.settings['ydim'].get(),
@@ -1179,6 +1182,7 @@ class Application(Frame):
                     upsampling=int(self.settings['upsampling'].get()),
                     seed_method=self.thresholdMethods[self.intSettings[
                         'thresholdMethod'].get() - 1],
+                    adaptive=self.intSettings['thresholdAdaptive'].get(),
                     ratio=self.settings['thresholdPercentage'].get(),
                     canny_variance=(self.settings['geodesicCannyVariance']
                                     .get(),) * 3,
@@ -1194,6 +1198,7 @@ class Application(Frame):
                     upsampling=int(self.settings['upsampling'].get()),
                     seed_method=self.thresholdMethods[self.intSettings[
                         'thresholdMethod'].get() - 1],
+                    adaptive=self.intSettings['thresholdAdaptive'].get(),
                     ratio=self.settings['thresholdPercentage'].get(),
                     lambda1=self.settings['edgeLambda1'].get(),
                     lambda2=self.settings['edgeLambda2'].get(),
