@@ -1073,6 +1073,12 @@ class Volume(object):
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(self.cells)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+            '''
+            if c[2] + c[5] < self._img.GetSize()[2] - 1:
+                c[5] += 1
+            if c[2] > 0:
+                c[2] -= 1
+            '''
             roi = sitk.RegionOfInterest(self.cells == (i + 1), c[3:], c[0:3])
             smoothlabel = sitk.BinaryMorphologicalClosing(roi, 3)
             smoothlabel = sitk.AntiAliasBinary(smoothlabel)
@@ -1081,7 +1087,9 @@ class Volume(object):
             a.SetDataSpacing([self._pixel_dim[0],
                               self._pixel_dim[1],
                               self._pixel_dim[2]])
-            a.SetDataExtent([0, 100, 0, 100, 0, self._img.GetSize()[2]])
+            a.SetDataExtent([0, self._img.GetSize()[0],
+                             0, self._img.GetSize()[1],
+                             0, self._img.GetSize()[2]])
             n = sitk.GetArrayFromImage(smoothlabel)
             a.SetArray(n)
             a.Update()
@@ -1100,9 +1108,22 @@ class Volume(object):
             triangles.SetInputConnection(iso.GetOutputPort())
             triangles.Update()
 
+            #fill holes
+            fill = vtk.vtkFillHolesFilter()
+            fill.SetInputConnection(triangles.GetOutputPort())
+            fill.SetHoleSize(1e7)
+            fill.Update()
+
+            #correct bad normals
+            flip = vtk.vtkPolyDataNormals()
+            flip.ConsistencyOn()
+            flip.SplittingOff()
+            flip.SetInputConnection(fill.GetOutputPort())
+            flip.Update()
+
             smooth = vtk.vtkWindowedSincPolyDataFilter()
             smooth.SetNumberOfIterations(100)
-            smooth.SetInputConnection(triangles.GetOutputPort())
+            smooth.SetInputConnection(flip.GetOutputPort())
             smooth.Update()
 
             self.surfaces.append(smooth.GetOutput())
