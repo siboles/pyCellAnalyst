@@ -70,7 +70,7 @@ class Application(Frame):
                             'display': IntVar(value=1),
                             'removeBright': IntVar(value=0),
                             'edgeEnhancement': IntVar(value=0),
-                            'contrastStretching': IntVar(value=0),
+                            'processAs2D': IntVar(value=0),
                             'fillHoles': IntVar(value=0),
                             'handleOverlap': IntVar(value=1),
                             'debug': IntVar(value=0),
@@ -177,7 +177,7 @@ class Application(Frame):
         settings = [('Display Objects', 'display'),
                     ('Remove Bright Spots', 'removeBright'),
                     ('Edge Enhancement', 'edgeEnhancement'),
-                    ('2D Contrast Stretching', 'contrastStretching'),
+                    ('Consider Slices Independent', 'processAs2D'),
                     ('Fill Holes', 'fillHoles'),
                     ('Handle Overlap', 'handleOverlap'),
                     ('Debug Mode', 'debug')]
@@ -1159,7 +1159,7 @@ class Application(Frame):
                              'handleOverlap'].get(),
                          display=self.intSettings['display'].get(),
                          stain=objects[self.intSettings['stain'].get()],
-                         stretch=self.intSettings['contrastStretching'].get(),
+                         two_dim=self.intSettings['processAs2D'].get(),
                          bright=self.intSettings['removeBright'].get(),
                          enhance_edge=self.intSettings[
                              'edgeEnhancement'].get(),

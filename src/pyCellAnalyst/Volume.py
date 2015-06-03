@@ -45,7 +45,7 @@ class Volume(object):
                  segmentation='Geodesic',
                  smoothing_method='Curvature Diffusion',
                  smoothing_parameters={},
-                 stretch=False,
+                 two_dim=False,
                  bright=False,
                  enhance_edge=False,
                  display=True,
@@ -101,9 +101,8 @@ class Volume(object):
                                                      'iterations': 10,
                                                      'patches': 20,
                                                      'noise model': 'poisson'}
-        stretch              TYPE: Boolean. Whether to do contrast stretching
-                             of 2D slices in regions of interest after to
-                             smoothing.
+        two_dim              TYPE: Boolean. If true treat each 2D slice in
+                             stack as independent.
         bright               TYPE: Boolean. Whether to replace voxels higher
                              than 98 percentile intensity with median value
                              (radius 6)
@@ -153,10 +152,11 @@ class Volume(object):
         self._img = None
         self._imgType = None
         self._imgTypeMax = None
+        self.smoothed = []
         self.handle_overlap = handle_overlap
         self.smoothing_method = smoothing_method
         self.smoothing_parameters = smoothing_parameters
-        self.stretch = stretch
+        self.two_dim = two_dim
         self.bright = bright
         self.enhance_edge = enhance_edge
         self.debug = debug
@@ -268,38 +268,6 @@ class Volume(object):
 
         self._img = sitk.Cast(self._img, self._imgType)
         self._img.SetSpacing(self._pixel_dim)
-
-    def equalize2D(self, img):
-        if self._img.GetDimension() == 3:
-            size = img.GetSize()
-            slices = []
-            ucutoffs = np.zeros((size[2],), int)
-            lcutoffs = np.zeros((size[2],), int)
-            for i in xrange(size[2]):
-                s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, i])
-                a = sitk.GetArrayFromImage(s)
-                ucutoffs[i] = np.percentile(a, 98)
-                lcutoffs[i] = np.percentile(a, 2)
-                slices.append(s)
-            u10 = np.percentile(ucutoffs, 10)
-            ucutoffs[ucutoffs < u10] = self._imgTypeMax
-            for i, s in enumerate(slices):
-                slices[i] = sitk.IntensityWindowing(s,
-                                                    lcutoffs[i],
-                                                    ucutoffs[i],
-                                                    0,
-                                                    self._imgTypeMax)
-            newimg = sitk.JoinSeries(slices)
-            newimg.SetOrigin(img.GetOrigin())
-            newimg.SetSpacing(img.GetSpacing())
-            newimg.SetDirection(img.GetDirection())
-        else:
-            a = sitk.GetArrayFromImage(img)
-            ucutoff = np.percentile(a, 98)
-            lcutoff = np.percentile(a, 2)
-            newimg = sitk.IntensityWindowing(img, lcutoff, ucutoff,
-                                             0, self._imgTypeMax)
-        return sitk.Cast(newimg, self._imgType)
 
     def smoothRegion(self, img):
         img = sitk.Cast(img, sitk.sitkFloat32)
@@ -414,9 +382,6 @@ class Volume(object):
         #enhance the edges
         if self.enhance_edge:
             img = sitk.LaplacianSharpening(img)
-        # do contrast stretching on 2D slices if set to True
-        if self.stretch:
-            img = self.equalizeImage2D(sitk.Cast(img, self._imgType))
         return sitk.Cast(img, sitk.sitkFloat32)
 
     def _getMinMax(self, img):
@@ -505,7 +470,11 @@ class Volume(object):
                 a.SetOrigin(roi.GetOrigin())
                 a.SetDirection(roi.GetDirection())
                 roi = a
-            simg = self.smoothRegion(roi)
+            if self.two_dim:
+                simg = self.smooth2D(roi)
+            else:
+                simg = self.smoothRegion(roi)
+            self.smoothed.append(simg)
             if self.debug:
                 sitk.WriteImage(sitk.Cast(simg, self._imgType),
                                 self._output_dir + self._path_dlm +
@@ -517,18 +486,30 @@ class Volume(object):
             if method == 'Percentage':
                 t = self._getMinMax(simg)[1]
                 if self._stain == 'Foreground':
-                    t *= ratio
-                    seg = sitk.BinaryThreshold(simg, t, 1e7)
+                    if self.two_dim:
+                        seg, thigh, tlow = self.threshold2D(simg, 'PFore',
+                                                            ratio)
+                    else:
+                        t *= ratio
+                        seg = sitk.BinaryThreshold(simg, t, 1e7)
                 elif self._stain == 'Background':
-                    t *= (1.0 - ratio)
-                    seg = sitk.BinaryThreshold(simg, 0, t)
+                    if self.two_dim:
+                        seg, thigh, tlow = self.threshold2D(simg, 'PBack',
+                                                            ratio)
+                    else:
+                        t *= (1.0 - ratio)
+                        seg = sitk.BinaryThreshold(simg, 0, t)
                 else:
                     raise SystemExit(("Unrecognized value for 'stain', {:s}. "
                                       "Options are 'Foreground' or "
                                       "'Background'"
                                       .format(self._stain)))
-                print("... Thresholded using {:s} method at a value of: {:d}"
-                      .format(method, int(t)))
+                if self.two_dim:
+                    print(("... Threshold using {:s} method ranged: "
+                           "{:d}-{:d}".format(method, int(tlow), int(thigh))))
+                else:
+                    print(("... Thresholded using {:s} method at a "
+                           "value of: {:d}".format(method, int(t))))
 
             elif method == 'Otsu':
                 thres = sitk.OtsuThresholdImageFilter()
@@ -573,12 +554,17 @@ class Volume(object):
                 elif self._stain == 'Background':
                     thres.SetInsideValue(1)
                     thres.SetOutsideValue(0)
-                seg = thres.Execute(simg)
-                t = thres.GetThreshold()
-                print("... Threshold determined by {:s} method: {:d}"
-                      .format(method, int(t)))
+                if self.two_dim:
+                    seg, thigh, tlow = self.threshold2D(simg, thres, ratio)
+                    print(("... Thresholds determined by {:s} method ranged: "
+                           "[{:d}-{:d}".format(method, int(tlow), int(thigh))))
+                else:
+                    seg = thres.Execute(simg)
+                    t = thres.GetThreshold()
+                    print("... Threshold determined by {:s} method: {:d}"
+                          .format(method, int(t)))
 
-            if adaptive:
+            if adaptive and not(self.two_dim):
                 newt = np.copy(t)
                 if dimension == 3:
                     region_bnds = [(0, region[3]), (0, region[4])]
@@ -1247,3 +1233,46 @@ class Volume(object):
         self.volumes = labelstats['volume']
         self.centroids = labelstats['centroid']
         self.dimensions = labelstats['ellipsoid diameters']
+
+    def smooth2D(self, img):
+        stack = []
+        size = img.GetSize()
+        for sl in xrange(size[2]):
+            s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
+            stack.append(self.smoothRegion(s))
+        simg = sitk.JoinSeries(stack)
+        simg.SetOrigin(img.GetOrigin())
+        simg.SetSpacing(img.GetSpacing())
+        simg.SetDirection(img.GetDirection())
+        return simg
+
+    def threshold2D(self, img, thres, ratio):
+        stack = []
+        values = []
+        size = img.GetSize()
+        if (thres != "PFore" and thres != "PBack"):
+            for sl in xrange(size[2]):
+                s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
+                stack.append(thres.Execute(s))
+                values.append(thres.GetThreshold())
+        else:
+            for sl in xrange(size[2]):
+                s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
+                t = self._getMinMax(s)[1]
+                if thres == "PFore":
+                    t *= ratio
+                    stack.append(sitk.BinaryThreshold(s, t, 1e7))
+                    values.append(t)
+                else:
+                    t *= (1.0 - ratio)
+                    stack.append(sitk.BinaryThreshold(s, 0, t))
+                    values.append(t)
+
+        seg = sitk.JoinSeries(stack)
+        seg.SetOrigin(img.GetOrigin())
+        seg.SetSpacing(img.GetSpacing())
+        seg.SetDirection(img.GetDirection())
+        return seg, max(values), min(values)
+
+    def active2D(self, img):
+        pass
