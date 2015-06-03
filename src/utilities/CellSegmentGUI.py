@@ -71,6 +71,7 @@ class Application(Frame):
                             'removeBright': IntVar(value=0),
                             'edgeEnhancement': IntVar(value=0),
                             'processAs2D': IntVar(value=0),
+                            'opening': IntVar(value=1),
                             'fillHoles': IntVar(value=0),
                             'handleOverlap': IntVar(value=1),
                             'debug': IntVar(value=0),
@@ -178,6 +179,7 @@ class Application(Frame):
                     ('Remove Bright Spots', 'removeBright'),
                     ('Edge Enhancement', 'edgeEnhancement'),
                     ('Consider Slices Independent', 'processAs2D'),
+                    ('Perform Morphogical Opening', 'opening'),
                     ('Fill Holes', 'fillHoles'),
                     ('Handle Overlap', 'handleOverlap'),
                     ('Debug Mode', 'debug')]
@@ -1169,6 +1171,8 @@ class Application(Frame):
                          smoothing_method=self.smoothingMethods[
                              self.intSettings['smoothingMethod'].get() - 1],
                          debug=self.intSettings['debug'].get(),
+                         fillholes=self.intSettings['fillHoles'].get(),
+                         opening=self.intSettings['opening'].get(),
                          smoothing_parameters=smoothingParameters)
 
             if self.intSettings['activeMethod'].get() == 1:

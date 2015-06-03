@@ -51,6 +51,7 @@ class Volume(object):
                  display=True,
                  handle_overlap=True,
                  debug=False,
+                 opening=True,
                  fillholes=True):
         """
         INPUTS
@@ -125,6 +126,9 @@ class Volume(object):
                              geodesicSegmentation:
                               All of the above plus: edge map image for each
                               region as edge_[region id].nii e.g. edge_001.nii
+        opening              TYPE: Boolean. If True, perform morphological
+                             opening. If object to detect is small or thin this
+                             setting this False, may be needed.
         fillholes            TYPE: Boolean. If True, holes fully within the
                              segmented object will be filled.
         """
@@ -169,6 +173,7 @@ class Volume(object):
         except:
             pass
         self.fillholes = fillholes
+        self.opening = opening
         # read in the TIFF stack
         self._parseStack()
         # define a blank image with the same size and spacing as
@@ -570,9 +575,10 @@ class Volume(object):
                 else:
                     region_bnds = [(0, region[2]), (0, region[3])]
                 while True:
-                    #Opening (Erosion/Dilation) step to remove islands
-                    #smaller than 1 voxels in radius
-                    seg = sitk.BinaryMorphologicalOpening(seg, 1)
+                    if self.opening:
+                        #Opening (Erosion/Dilation) step to remove islands
+                        #smaller than 1 voxels in radius
+                        seg = sitk.BinaryMorphologicalOpening(seg, 1)
                     if self.fillholes:
                         seg = sitk.BinaryFillhole(seg != 0)
                     #Get connected regions
@@ -635,9 +641,10 @@ class Volume(object):
                         print(("... ... Adjusted the threshold to: "
                               "{:d}".format(int(newt))))
             else:
-                #Opening (Erosion/Dilation) step to remove islands
-                #smaller than 1 voxels in radius
-                seg = sitk.BinaryMorphologicalOpening(seg, 1)
+                if self.opening:
+                    #Opening (Erosion/Dilation) step to remove islands
+                    #smaller than 1 voxels in radius
+                    seg = sitk.BinaryMorphologicalOpening(seg, 1)
                 if self.fillholes:
                     seg = sitk.BinaryFillhole(seg != 0)
                 #Get connected regions
@@ -995,7 +1002,8 @@ class Volume(object):
                              intensity_weighted)
             seg = sitk.BinaryThreshold(seg, 1e-7, 1e7)
             #Get connected regions
-            seg = sitk.BinaryMorphologicalOpening(seg, upsampling)
+            if self.opening:
+                seg = sitk.BinaryMorphologicalOpening(seg, upsampling)
             r = sitk.ConnectedComponent(seg)
             labelstats = self._getLabelShape(r)
             label = np.argmax(labelstats['volume']) + 1
