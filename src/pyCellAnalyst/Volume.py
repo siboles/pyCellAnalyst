@@ -1289,7 +1289,8 @@ class Volume(object):
         if (thres != "PFore" and thres != "PBack"):
             for sl in xrange(size[2]):
                 s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
-                stack.append(thres.Execute(s))
+                seg = thres.Execute(s)
+                stack.append(sitk.BinaryFillhole(seg != 0))
                 values.append(thres.GetThreshold())
         else:
             for sl in xrange(size[2]):
@@ -1297,11 +1298,14 @@ class Volume(object):
                 t = self._getMinMax(s)[1]
                 if thres == "PFore":
                     t *= ratio
-                    stack.append(sitk.BinaryThreshold(s, t, 1e7))
+                    seg = sitk.BinaryThreshold(s, t, 1e7)
+                    stack.append(sitk.BinaryFillhole(seg != 0))
                     values.append(t)
                 else:
                     t *= (1.0 - ratio)
-                    stack.append(sitk.BinaryThreshold(s, 0, t))
+                    seg = sitk.BinaryThreshold(s, 0, t)
+                    if self.fillholes:
+                        stack.append(sitk.BinaryFillhole(seg != 0))
                     values.append(t)
 
         seg = sitk.JoinSeries(stack)
