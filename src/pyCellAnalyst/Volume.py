@@ -188,7 +188,10 @@ class Volume(object):
         # and default to whole image
         if regions is None:
             size = np.array(self._img.GetSize(), int) - 1
-            self._regions = [[0, 0, 0] + list(size)]
+            if self._img.GetDimension() == 3:
+                self._regions = [[0, 0, 0] + list(size)]
+            else:
+                self._regions = [[0, 0] + list(size)]
         else:
             self._regions = regions
 
@@ -460,6 +463,7 @@ class Volume(object):
             if dimension == 3:
                 roi = sitk.RegionOfInterest(self._img, region[3:], region[0:3])
             else:
+                self._pixel_dim = self._pixel_dim[0:2]
                 roi = sitk.RegionOfInterest(self._img, region[2:], region[0:2])
             #Remove bright spots if bright=True
             if self.bright:
@@ -1088,13 +1092,8 @@ class Volume(object):
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(self.cells)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-            '''
-            if c[2] + c[5] < self._img.GetSize()[2] - 1:
-                c[5] += 1
-            if c[2] > 0:
-                c[2] -= 1
-            '''
             roi = sitk.RegionOfInterest(self.cells == (i + 1), c[3:], c[0:3])
+
             smoothlabel = sitk.BinaryMorphologicalClosing(roi, 3)
             smoothlabel = sitk.AntiAliasBinary(smoothlabel)
             smoothlabel = resampler.Execute(smoothlabel)
