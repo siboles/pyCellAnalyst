@@ -464,7 +464,8 @@ class Volume(object):
                 roi = sitk.RegionOfInterest(self._img, region[3:], region[0:3])
             else:
                 self._pixel_dim = self._pixel_dim[0:2]
-                roi = sitk.RegionOfInterest(self._img, region[2:], region[0:2])
+                roi = sitk.RegionOfInterest(self._img, region[3:5],
+                                            region[0:2])
             #Remove bright spots if bright=True
             if self.bright:
                 a = sitk.GetArrayFromImage(roi)
@@ -789,10 +790,10 @@ class Volume(object):
                 rimg = refine.Execute(roi)
             else:
                 seed = sitk.RegionOfInterest(self.cells,
-                                             region[2:],
+                                             region[3:5],
                                              region[0:2])
                 roi = sitk.RegionOfInterest(self._img,
-                                            region[2:],
+                                            region[3:5],
                                             region[0:2])
                 #resample the Region of Interest to improve resolution
                 #of derivatives
@@ -966,10 +967,10 @@ class Volume(object):
                 refine.SetOutputDirection(roi.GetDirection())
             else:
                 seed = sitk.RegionOfInterest(self.cells,
-                                             region[2:],
+                                             region[3:5],
                                              region[0:2])
                 roi = sitk.RegionOfInterest(self._img,
-                                            region[2:],
+                                            region[3:5],
                                             region[0:2])
                 #resample the Region of Interest to improve resolution
                 #of derivatives
