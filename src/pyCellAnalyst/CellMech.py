@@ -63,8 +63,10 @@ class CellMech(object):
                               "deformed state STLs. Terminating..."))
         self._ref_dir = ref_dir
         self._def_dir = def_dir
-        self.rlabels = sitk.ReadImage(self._ref_dir + "/labels.nii")
-        self.dlabels = sitk.ReadImage(self._def_dir + "/labels.nii")
+        self.rlabels = sitk.ReadImage(
+            str(os.path.normpath(self._ref_dir + os.sep + "labels.nii")))
+        self.dlabels = sitk.ReadImage(
+            str(os.path.normpath(self._def_dir + os.sep + "labels.nii")))
         self.deformable = deformable
         self.saveFEA = saveFEA
         self.deformableSettings = deformableSettings
@@ -103,8 +105,9 @@ class CellMech(object):
                        'elements': self._elements[i],
                        'surfaces': self._snodes[i],
                        'boundary conditions': bc}
-                fid = open(self._def_dir + '/cellFEA{:02d}.pkl'
-                           .format(i), 'wb')
+                fid = open(str(os.path.normpath(
+                    self._def_dir + os.sep + 'cellFEA{:02d}.pkl'
+                    .format(i))), 'wb')
                 pickle.dump(fea, fid)
                 fid.close()
 
@@ -113,19 +116,22 @@ class CellMech(object):
         for fname in sorted(os.listdir(self._ref_dir)):
             if '.stl' in fname.lower():
                 reader = vtk.vtkSTLReader()
-                reader.SetFileName(self._ref_dir + '/' + fname)
+                reader.SetFileName(
+                    str(os.path.normpath(self._ref_dir + os.sep + fname)))
                 reader.Update()
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
                 self.rsurfs.append(triangles.GetOutput())
                 if self.deformable:
-                    self._make3Dmesh(self._ref_dir + '/' + fname)
+                    self._make3Dmesh(
+                        str(os.path.normpath(self._ref_dir + os.sep + fname)))
 
         for fname in sorted(os.listdir(self._def_dir)):
             if '.stl' in fname.lower():
                 reader = vtk.vtkSTLReader()
-                reader.SetFileName(self._def_dir + '/' + fname)
+                reader.SetFileName(
+                    str(os.path.normpath(self._def_dir + os.sep + fname)))
                 reader.Update()
                 triangles = vtk.vtkTriangleFilter()
                 triangles.SetInputConnection(reader.GetOutputPort())
@@ -251,8 +257,9 @@ class CellMech(object):
                     bcs[j, 2] = d[2]
                 self._bcs.append(bcs)
             idWriter = vtk.vtkXMLUnstructuredGridWriter()
-            idWriter.SetFileName(self._def_dir + '/cell{:02d}.vtu'
-                                 .format(r + 1))
+            idWriter.SetFileName(
+                str(os.path.normpath(self._def_dir + '/cell{:02d}.vtu'
+                                     .format(r + 1))))
             idWriter.SetInputData(self.cell_fields[r])
             idWriter.Write()
 

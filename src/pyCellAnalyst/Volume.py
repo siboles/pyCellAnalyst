@@ -1127,7 +1127,7 @@ class Volume(object):
             triangles = vtk.vtkGeometryFilter()
             triangles.SetInputConnection(iso.GetOutputPort())
             triangles.Update()
-
+            '''
             #fill holes
             fill = vtk.vtkFillHolesFilter()
             fill.SetInputConnection(triangles.GetOutputPort())
@@ -1140,10 +1140,10 @@ class Volume(object):
             flip.SplittingOff()
             flip.SetInputConnection(fill.GetOutputPort())
             flip.Update()
-
+            '''
             smooth = vtk.vtkWindowedSincPolyDataFilter()
             smooth.SetNumberOfIterations(100)
-            smooth.SetInputConnection(flip.GetOutputPort())
+            smooth.SetInputConnection(triangles.GetOutputPort())
             smooth.Update()
 
             self.surfaces.append(smooth.GetOutput())
