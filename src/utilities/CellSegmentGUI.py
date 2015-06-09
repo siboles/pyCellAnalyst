@@ -76,11 +76,11 @@ class Application(Frame):
                             'handleOverlap': IntVar(value=1),
                             'debug': IntVar(value=0),
                             'smoothingMethod': IntVar(value=4),
-                            'thresholdMethod': IntVar(value=1),
+                            'thresholdMethod': IntVar(value=3),
                             'thresholdAdaptive': IntVar(value=1),
-                            'activeMethod': IntVar(value=2),
-                            'defReg': IntVar(value=1),
-                            'saveFEA': IntVar(value=1)}
+                            'activeMethod': IntVar(value=1),
+                            'defReg': IntVar(value=0),
+                            'saveFEA': IntVar(value=0)}
 
         self.smoothingMethods = ['None',
                                  'Median',
@@ -297,27 +297,32 @@ class Application(Frame):
                                      padx=5, pady=5, sticky=NW)
         self.textThresholdHelp = Text(self.thresholdHelpFrame, wrap=WORD,
                                       height=11, width=40)
-        self.textThresholdHelp.insert(END, ("Thresholds at a user-specified "
-                                            "ratio of the maximum voxel "
-                                            "intensity."))
+        self.textThresholdHelp.insert(END, ("Calculates the threshold such"
+                                            " that entropy is maximized "
+                                            "between the foreground and "
+                                            "background. This has shown "
+                                            "good performance even when "
+                                            "objects are in close "
+                                            "proximity."))
         self.textThresholdHelp["state"] = DISABLED
+        self.thresholdLink = (r"http://dx.doi.org/10.1016/"
+                              "0734-189X(85)90125-2")
+
         self.thresholdReference = Label(self.thresholdHelpFrame,
                                         text="", fg="blue", cursor="hand2")
         self.textThresholdHelp.pack(anchor=NW)
 
         self.thresholdSettingsFrame = LabelFrame(self.tab3,
                                                  text="Threshold Settings")
-        self.thresholdSettingsFrame.grid(row=0, column=2, padx=5, pady=5,
-                                         sticky=NW)
         Checkbutton(
             self.thresholdSettingsFrame,
             text="Iterative Threshold Adjustment",
             variable=self.intSettings['thresholdAdaptive']).pack(anchor=W)
+        self.thresholdSettingsFrame.grid(row=0, column=2, padx=5, pady=5,
+                                         sticky=NW)
         Label(self.thresholdSettingsFrame,
-              text="Ratio").pack(anchor=W)
-        e = Entry(self.thresholdSettingsFrame,
-                  textvariable=self.settings['thresholdPercentage'])
-        e.pack(anchor=W)
+              text="     No additional settings needed.",
+              fg='red').pack(anchor=W)
 
         #make Active Contour segmentation frame
         self.activeContourFrame = LabelFrame(
@@ -330,35 +335,15 @@ class Application(Frame):
                                   padx=5, pady=5, sticky=NW)
         self.textActiveHelp = Text(self.activeHelpFrame,
                                    wrap=WORD, height=11, width=40)
-        self.textActiveHelp.insert(END, ("Segments object using a geodesic "
-                                         "active contour levelset algorithm. "
-                                         "Uses the Canny edge detector; Canny"
-                                         "Variance governs degree of Gaussian"
-                                         " smoothing of edge detector. Upper"
-                                         "Threshold will guarantee detection "
-                                         "of edges with intensity greater than"
-                                         " setting. LowerThreshold will disca"
-                                         "rd intensities lower than setting. "
-                                         "Propagation is the contour inflation"
-                                         " force (deflation if negative); "
-                                         "higher values result in skipping "
-                                         "weaker edges or small islands of "
-                                         "contrast change. Curvature governs "
-                                         "how smooth the contour will be; "
-                                         "higher values result in smoother. "
-                                         "Advection causes the contour to "
-                                         "attract to edges; higher values "
-                                         "help prevent leakage. Iterations "
-                                         "are the maximum iterations to take."
-                                         " Maximum RMS Error Change is the "
-                                         "change in RMS at which iterations "
-                                         "will terminate if Iterations has "
-                                         "not yet been reached."))
+        self.textActiveHelp.insert(END, ("Only a threshold-based "
+                                         "segmentation will "
+                                         "be performed."))
+
         self.textActiveHelp.pack(anchor=NW)
         self.textActiveHelp["state"] = DISABLED
-        self.activeLink = r"http://dx.doi.org/10.1023/A:1007979827043"
+        self.activeLink = ""
         self.activeReference = Label(self.activeHelpFrame,
-                                     text="Reference",
+                                     text="",
                                      fg="blue", cursor="hand2")
         self.activeReference.bind("<Button-1>", self.open_active_reference)
         self.activeReference.pack(anchor=NW)
@@ -381,19 +366,8 @@ class Application(Frame):
                                               text="Active Contour Settings")
         self.activeSettingsFrame.grid(row=1, column=2,
                                       padx=5, pady=5, sticky=NW)
-        settings = [('CannyVariance', 'geodesicCannyVariance'),
-                    ('UpperThreshold', 'geodesicCannyUpper'),
-                    ('LowerThreshold', 'geodesicCannyLower'),
-                    ('Propagation', 'geodesicPropagation'),
-                    ('Curvature', 'geodesicCurvature'),
-                    ('Advection', 'geodesicAdvection'),
-                    ('Iterations', 'geodesicIterations'),
-                    ('Maximum RMS Error Change', 'geodesicRMS')]
-
-        for t, v in settings:
-            Label(self.activeSettingsFrame, text=t).pack(anchor=W)
-            Entry(self.activeSettingsFrame,
-                  textvariable=self.settings[v]).pack(anchor=W)
+        Label(self.activeSettingsFrame,
+              text="No additional settings needed.").pack(anchor=W)
 
         ##### Kinematics Tab ######
         #create label frame for image directory selection
@@ -1076,6 +1050,9 @@ class Application(Frame):
                 self.settings[key].set(values['Settings'][key])
             for key in self.intSettings:
                 self.intSettings[key].set(values['ButtonStates'][key])
+        self.populateSmoothingSettings()
+        self.populateThresholdSettings()
+        self.populateActiveContourSettings()
 
     def loadROI(self):
         filename = tkFileDialog.askopenfilename(

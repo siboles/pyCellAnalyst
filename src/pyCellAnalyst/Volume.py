@@ -132,15 +132,6 @@ class Volume(object):
         fillholes            TYPE: Boolean. If True, holes fully within the
                              segmented object will be filled.
         """
-        # check what OS we are running on
-        op_sys = platform.platform()
-        if 'Windows' in op_sys:
-            self._path_dlm = '\\'
-        elif 'Linux' in op_sys:
-            self._path_dlm = '/'
-        else:
-            print('WARNING: This module is untested on your operating system.')
-            self._path_dlm = '/'
         warnings.filterwarnings("ignore")
 
         self._vol_dir = vol_dir
@@ -169,7 +160,9 @@ class Volume(object):
                 for p in ['seed*.nii', 'smoothed*.nii', 'edge*.nii']:
                     files = fnmatch.filter(os.listdir(self._output_dir), p)
                     for f in files:
-                        os.remove(self._output_dir + self._path_dlm + f)
+                        filename = os.path.normpath(
+                            self._output_dir + os.sep + f)
+                        os.remove(filename)
         except:
             pass
         self.fillholes = fillholes
@@ -221,7 +214,7 @@ class Volume(object):
             pass
 
         sitk.WriteImage(self._img,
-                        self._output_dir + self._path_dlm + 'stack.nii')
+                        self._output_dir + os.sep + 'stack.nii')
 
     def _parseStack(self):
         reader = sitk.ImageFileReader()
@@ -240,7 +233,8 @@ class Volume(object):
                 files = files[sorter]
                 img = []
                 for fname in files:
-                    reader.SetFileName(self._vol_dir + self._path_dlm + fname)
+                    filename = os.path.normpath(self._vol_dir + os.sep + fname)
+                    reader.SetFileName(filename)
                     im = reader.Execute()
                     if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
                         img.append(sitk.VectorMagnitude(im))
@@ -251,10 +245,12 @@ class Volume(object):
                       .format(files[0], files[-1]))
             else:
                 print("\nImported 2D image {:s}".format(files[0]))
-                reader.SetFileName(self._vol_dir + self._path_dlm + files[0])
+                filename = os.path.normpath(self._vol_dir + os.sep + files[0])
+                reader.SetFileName(filename)
                 self._img = reader.Execute()
         elif ftype == "*.nii":
-            im = sitk.ReadImage(self._vol_dir + self._path_dlm + files[0])
+            filename = os.path.normpath(self._vol_dir + os.sep + files[0])
+            im = sitk.ReadImage(filename)
             if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
                 im = sitk.VectorMagnitude(im)
             self._img = im
@@ -486,8 +482,9 @@ class Volume(object):
             self.smoothed.append(simg)
             if self.debug:
                 sitk.WriteImage(sitk.Cast(simg, self._imgType),
-                                self._output_dir + self._path_dlm +
-                                "smoothed_{:03d}.nii".format(i + 1))
+                                os.path.normpath(
+                                    self._output_dir + os.sep +
+                                    "smoothed_{:03d}.nii".format(i + 1)))
             print("\n------------------")
             print("Segmenting Cell {:d}".format(i + 1))
             print("------------------\n")
@@ -827,17 +824,20 @@ class Volume(object):
             canny = sitk.Cast(canny, sitk.sitkFloat32)
             if self.debug:
                 sitk.WriteImage(sitk.Cast(simg, self._imgType),
-                                self._output_dir +
-                                self._path_dlm + "smoothed_{:03d}.nii"
-                                .format(i + 1))
+                                os.path.normpath(
+                                    self._output_dir +
+                                    os.sep + "smoothed_{:03d}.nii"
+                                    .format(i + 1)))
                 sitk.WriteImage(sitk.Cast(seed, self._imgType),
-                                self._output_dir +
-                                self._path_dlm + "seed_{:03d}.nii"
-                                .format(i + 1))
+                                os.path.normpath(
+                                    self._output_dir +
+                                    os.sep + "seed_{:03d}.nii"
+                                    .format(i + 1)))
                 sitk.WriteImage(sitk.Cast(canny, self._imgType),
-                                self._output_dir +
-                                self._path_dlm + "edge_{:03d}.nii"
-                                .format(i + 1))
+                                os.path.normpath(
+                                    self._output_dir +
+                                    os.sep + "edge_{:03d}.nii"
+                                    .format(i + 1)))
             d = sitk.SignedMaurerDistanceMap(seed, insideIsPositive=False,
                                              squaredDistance=False,
                                              useImageSpacing=True)
@@ -990,8 +990,9 @@ class Volume(object):
             seed = refine.Execute(seed)
             if self.debug:
                 sitk.WriteImage(sitk.Cast(seed, self._imgType),
-                                self._output_dir + self._path_dlm +
-                                "seed_{:03d}.nii".format(i + 1))
+                                os.path.normpath(
+                                    self._output_dir + os.sep +
+                                    "seed_{:03d}.nii".format(i + 1)))
             intensity_weighted = sitk.Cast(rimg, sitk.sitkFloat32)
             phi0 = sitk.SignedMaurerDistanceMap(seed == (i + 1),
                                                 insideIsPositive=False,
@@ -1086,7 +1087,7 @@ class Volume(object):
         #delete old surfaces
         old_surfaces = fnmatch.filter(os.listdir(self._output_dir), '*.stl')
         for f in old_surfaces:
-            os.remove(self._output_dir + self._path_dlm + f)
+            os.remove(self._output_dir + os.sep + f)
         #create and write the STLs
         stl = vtk.vtkSTLWriter()
         for i, c in enumerate(self._regions):
@@ -1143,7 +1144,8 @@ class Volume(object):
 
             self.surfaces.append(smooth.GetOutput())
             filename = 'cell{:02d}.stl'.format(i + 1)
-            stl.SetFileName(self._output_dir + self._path_dlm + filename)
+            stl.SetFileName(
+                os.path.normpath(self._output_dir + os.sep + filename))
             stl.SetInputData(self.surfaces[-1])
             stl.Write()
         if self.display:
@@ -1256,13 +1258,14 @@ class Volume(object):
 
             pngWriter = vtk.vtkPNGWriter()
             pngWriter.SetFileName(
-                self._output_dir + self._path_dlm + "cells.png")
+                os.path.normpath(self._output_dir + os.sep + "cells.png"))
             pngWriter.SetInputConnection(windowToImageFilter.GetOutputPort())
             pngWriter.Write()
 
     def writeLabels(self):
         sitk.WriteImage(self.cells,
-                        self._output_dir + self._path_dlm + 'labels.nii')
+                        os.path.normpath(
+                            self._output_dir + os.sep + 'labels.nii'))
 
     def getDimensions(self):
         labelstats = self._getLabelShape(self.cells)
