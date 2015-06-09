@@ -214,7 +214,8 @@ class Volume(object):
             pass
 
         sitk.WriteImage(self._img,
-                        self._output_dir + os.sep + 'stack.nii')
+                        str(os.path.normpath(
+                            self._output_dir + os.sep + 'stack.nii')))
 
     def _parseStack(self):
         reader = sitk.ImageFileReader()
