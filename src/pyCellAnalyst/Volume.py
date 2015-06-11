@@ -2,7 +2,6 @@ import os
 import re
 import string
 import warnings
-import platform
 import vtk
 import fnmatch
 import numpy as np
@@ -27,6 +26,7 @@ class Volume(object):
     Attributes:
     cells        An image containing the segmented objects as integer labels.
                  Has the same properties as the input image stack.
+    thresholds   The threshold level for each cell
     volumes      List of the physical volumes of the segmented objects.
     centroids    List of centroids of segmented objects in physical space.
     surfaces     List containing VTK STL objects.
@@ -147,7 +147,7 @@ class Volume(object):
         self._img = None
         self._imgType = None
         self._imgTypeMax = None
-        self.smoothed = []
+
         self.handle_overlap = handle_overlap
         self.smoothing_method = smoothing_method
         self.smoothing_parameters = smoothing_parameters
@@ -176,6 +176,13 @@ class Volume(object):
         self.cells.SetOrigin(self._img.GetOrigin())
         self.cells.SetDirection(self._img.GetDirection())
 
+        # list of smoothed ROIs
+        self.smoothed = []
+        # list of threshold values
+        self.thresholds = []
+        # list of levelsets
+        self.levelsets = []
+
         self.surfaces = []
         # if regions are not specified, assume there is only one cell
         # and default to whole image
@@ -196,8 +203,6 @@ class Volume(object):
         #unless specified as 'User'
         if segmentation == 'Threshold':
             self.thresholdSegmentation()
-        elif segmentation == 'Entropy':
-            self.entropySegmentation()
         elif segmentation == 'Geodesic':
             self.geodesicSegmentation()
         elif segmentation == 'EdgeFree':
@@ -497,15 +502,15 @@ class Volume(object):
                 t = self._getMinMax(simg)[1]
                 if self._stain == 'Foreground':
                     if self.two_dim:
-                        seg, thigh, tlow = self.threshold2D(simg, 'PFore',
-                                                            ratio)
+                        seg, thigh, tlow, tlist = self.threshold2D(
+                            simg, 'PFore', ratio)
                     else:
                         t *= ratio
                         seg = sitk.BinaryThreshold(simg, t, 1e7)
                 elif self._stain == 'Background':
                     if self.two_dim:
-                        seg, thigh, tlow = self.threshold2D(simg, 'PBack',
-                                                            ratio)
+                        seg, thigh, tlow, tlist = self.threshold2D(
+                            simg, 'PBack', ratio)
                     else:
                         t *= (1.0 - ratio)
                         seg = sitk.BinaryThreshold(simg, 0, t)
@@ -565,7 +570,8 @@ class Volume(object):
                     thres.SetInsideValue(1)
                     thres.SetOutsideValue(0)
                 if self.two_dim:
-                    seg, thigh, tlow = self.threshold2D(simg, thres, ratio)
+                    seg, thigh, tlow, tlist = self.threshold2D(
+                        simg, thres, ratio)
                     print(("... Thresholds determined by {:s} method ranged: "
                            "[{:d}-{:d}".format(method, int(tlow), int(thigh))))
                 else:
@@ -646,6 +652,7 @@ class Volume(object):
                     if not(newt == t):
                         print(("... ... Adjusted the threshold to: "
                               "{:d}".format(int(newt))))
+                self.thresholds.append(newt)
             else:
                 if self.opening:
                     #Opening (Erosion/Dilation) step to remove islands
@@ -665,6 +672,10 @@ class Volume(object):
                     if dist < d:
                         d = dist
                         label = l + 1
+                if self.two_dim:
+                    self.thresholds.append(tlist)
+                else:
+                    self.treshold.append(t)
 
             tmp = sitk.Image(self._img.GetSize(), self._imgType)
             tmp.SetSpacing(self._img.GetSpacing())
@@ -752,6 +763,7 @@ class Volume(object):
         active_iterations TYPE: integer. The maximum number of iterations the
                           active contour will conduct.
         """
+        self.active = "Geodesic"
         self.thresholdSegmentation(method=seed_method, ratio=ratio,
                                    adaptive=adaptive)
         dimension = self._img.GetDimension()
@@ -854,6 +866,7 @@ class Volume(object):
             gd.SetCurvatureScaling(curvature)
             gd.SetAdvectionScaling(advection)
             seg = gd.Execute(d, canny)
+            self.levelsets.append(seg)
             print("... Geodesic Active Contour Segmentation Completed")
             print("... ... Elapsed Iterations: {:d}"
                   .format(gd.GetElapsedIterations()))
@@ -931,6 +944,7 @@ class Volume(object):
         iterations  TYPE: integer. The number of iterations the active
                     contour method will conduct.
         """
+        self.active = "EdgeFree"
         self.thresholdSegmentation(method=seed_method, ratio=ratio,
                                    adaptive=adaptive)
         dimension = self._img.GetDimension()
@@ -1010,6 +1024,7 @@ class Volume(object):
             cv.SetLambda2(lambda2)
             seg = cv.Execute(sitk.Cast(phi0, sitk.sitkFloat32),
                              intensity_weighted)
+            self.levelsets.append(seg)
             seg = sitk.BinaryThreshold(seg, 1e-7, 1e7)
             #Get connected regions
             if self.opening:
@@ -1099,30 +1114,49 @@ class Volume(object):
             resampler.SetReferenceImage(self.cells)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             roi = sitk.RegionOfInterest(self.cells == (i + 1), c[3:], c[0:3])
+            roi = sitk.BinaryDilate(roi, 2)
+            if not(self.levelsets):
+                smoothed = sitk.Cast(roi, sitk.sitkFloat32) * self.smoothed[i]
+                resampler.SetInterpolator(sitk.sitkBSpline)
+                smoothlabel = resampler.Execute(smoothed)
+                a = vti.vtkImageImportFromArray()
+                a.SetDataSpacing([self._pixel_dim[0],
+                                  self._pixel_dim[1],
+                                  self._pixel_dim[2]])
+                a.SetDataExtent([0, self._img.GetSize()[0],
+                                 0, self._img.GetSize()[1],
+                                 0, self._img.GetSize()[2]])
+                n = sitk.GetArrayFromImage(smoothlabel)
+                a.SetArray(n)
+                a.Update()
 
-            smoothlabel = sitk.BinaryMorphologicalClosing(roi, 3)
-            smoothlabel = sitk.AntiAliasBinary(smoothlabel)
-            smoothlabel = resampler.Execute(smoothlabel)
-            a = vti.vtkImageImportFromArray()
-            a.SetDataSpacing([self._pixel_dim[0],
-                              self._pixel_dim[1],
-                              self._pixel_dim[2]])
-            a.SetDataExtent([0, self._img.GetSize()[0],
-                             0, self._img.GetSize()[1],
-                             0, self._img.GetSize()[2]])
-            n = sitk.GetArrayFromImage(smoothlabel)
-            a.SetArray(n)
-            a.Update()
-            thres = vtk.vtkImageThreshold()
-            thres.SetInputData(a.GetOutput())
-            thres.ThresholdByLower(0)
-            thres.ThresholdByUpper(1e7)
-            thres.Update()
+                iso = vtk.vtkImageMarchingCubes()
+                iso.SetInputData(a.GetOutput())
+                iso.SetValue(0, self.thresholds[i])
+                iso.Update()
+            else:
+                lvlset = resampler.Execute(self.levelsets[i])
+                lvl_roi = sitk.RegionOfInterest(lvlset, c[3:], c[0:3])
+                lvlset = sitk.Cast(roi, sitk.sitkFloat32) * lvl_roi
+                lvl_label = resampler.Execute(lvlset)
+                a = vti.vtkImageImportFromArray()
+                a.SetDataSpacing([self._pixel_dim[0],
+                                  self._pixel_dim[1],
+                                  self._pixel_dim[2]])
+                a.SetDataExtent([0, self._img.GetSize()[0],
+                                 0, self._img.GetSize()[1],
+                                 0, self._img.GetSize()[2]])
+                n = sitk.GetArrayFromImage(lvl_label)
+                a.SetArray(n)
+                a.Update()
 
-            iso = vtk.vtkImageMarchingCubes()
-            iso.SetInputConnection(thres.GetOutputPort())
-            iso.SetValue(0, 0)
-            iso.Update()
+                iso = vtk.vtkImageMarchingCubes()
+                iso.SetInputData(a.GetOutput())
+                if self.active == "Geodesic":
+                    iso.SetValue(0, -1e-7)
+                else:
+                    iso.SetValue(0, 1e-7)
+                iso.Update()
 
             triangles = vtk.vtkGeometryFilter()
             triangles.SetInputConnection(iso.GetOutputPort())
@@ -1210,7 +1244,7 @@ class Volume(object):
             aRenderer.ResetCamera()
             aCamera.Dolly(1.5)
 
-            bounds = thres.GetOutput().GetBounds()
+            bounds = a.GetOutput().GetBounds()
             triad = vtk.vtkCubeAxesActor()
             l = 0.5 * (bounds[5] - bounds[4])
             triad.SetBounds([bounds[0], bounds[0] + l,
@@ -1319,7 +1353,7 @@ class Volume(object):
         seg.SetOrigin(img.GetOrigin())
         seg.SetSpacing(img.GetSpacing())
         seg.SetDirection(img.GetDirection())
-        return seg, max(values), min(values)
+        return seg, max(values), min(values), values
 
     def active2D(self, img):
         pass
