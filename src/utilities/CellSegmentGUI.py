@@ -62,6 +62,7 @@ class Application(Frame):
                          'edgeLambda1': DoubleVar(value=1.1),
                          'edgeLambda2': DoubleVar(value=1.0),
                          'edgeIterations': IntVar(value=20),
+                         'edgeCurvature': DoubleVar(value=10.0),
                          'deformableIterations': IntVar(value=200),
                          'deformableRMS': DoubleVar(value=0.01),
                          'deformableSigma': DoubleVar(value=3.0)}
@@ -79,6 +80,7 @@ class Application(Frame):
                             'thresholdMethod': IntVar(value=3),
                             'thresholdAdaptive': IntVar(value=1),
                             'activeMethod': IntVar(value=1),
+                            'rigidInitial': IntVar(value=1),
                             'defReg': IntVar(value=0),
                             'saveFEA': IntVar(value=0)}
 
@@ -421,19 +423,28 @@ class Application(Frame):
             self.tab4, text="Kinematics Analysis Options")
         self.kinematicsOptionsFrame.grid(row=3, column=0,
                                          padx=5, pady=5, sticky=E + W)
-        settings = [('Perform Deformable Image Registration', 'defReg'),
+        settings = [('Align with a rigid rotation initially', 'initialRigid'),
+                    ('Perform Deformable Image Registration', 'defReg'),
                     ('Save for Finite Element Analysis', 'saveFEA')]
+
+        Checkbutton(self.kinematicsOptionsFrame,
+                    text='Align with a rigid rotation initially',
+                    variable=self.intSettings['rigidInitial']).grid(row=3,
+                                                                    column=0,
+                                                                    padx=5,
+                                                                    pady=5,
+                                                                    sticky=NW)
         Checkbutton(self.kinematicsOptionsFrame,
                     text='Perform Deformable Image Registration',
                     variable=self.intSettings['defReg'],
-                    command=self.populateDeformableSettings).grid(row=3,
+                    command=self.populateDeformableSettings).grid(row=4,
                                                                   column=0,
                                                                   padx=5,
                                                                   pady=5,
                                                                   sticky=NW)
         Checkbutton(self.kinematicsOptionsFrame,
                     text='Save for Finite Element Analysis',
-                    variable=self.intSettings['saveFEA']).grid(row=4,
+                    variable=self.intSettings['saveFEA']).grid(row=5,
                                                                column=0,
                                                                padx=5,
                                                                pady=5,
@@ -960,6 +971,7 @@ class Application(Frame):
             self.activeLink = r"http://dx.doi.org/10.1109/83.902291"
             settings = [('Lambda1 (internal weight)', 'edgeLambda1'),
                         ('Lambda2 (external weight)', 'edgeLambda2'),
+                        ('Curvature Weight', 'edgeCurvature'),
                         ('Iterations', 'edgeIterations')]
             for t, v in settings:
                 Label(self.activeSettingsFrame, text=t).pack(anchor=W)
@@ -1183,6 +1195,7 @@ class Application(Frame):
                     ratio=self.settings['thresholdPercentage'].get(),
                     lambda1=self.settings['edgeLambda1'].get(),
                     lambda2=self.settings['edgeLambda2'].get(),
+                    curvature=self.settings['edgeCurvature'].get(),
                     iterations=self.settings['edgeIterations'].get())
             vol.writeLabels()
             vol.writeSurfaces()
@@ -1198,6 +1211,8 @@ class Application(Frame):
         efid = open(pardir + "/Ellipsoidal_Analysis" + ts + ".csv", 'w')
         for i, d in enumerate(self.spatialDirectories):
             mech = CellMech(ref_dir=self.materialDirectory, def_dir=d,
+                            rigidInitial=self.intSettings['rigidInitial']
+                            .get(),
                             deformable=self.intSettings['defReg'].get(),
                             saveFEA=self.intSettings['saveFEA'].get(),
                             deformableSettings={

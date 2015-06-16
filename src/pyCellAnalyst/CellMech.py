@@ -50,6 +50,7 @@ class CellMech(object):
     def __init__(self,
                  ref_dir=None,
                  def_dir=None,
+                 rigidInitial=True,
                  deformable=False,
                  saveFEA=False,
                  deformableSettings={'Iterations': 200,
@@ -63,6 +64,7 @@ class CellMech(object):
                               "deformed state STLs. Terminating..."))
         self._ref_dir = ref_dir
         self._def_dir = def_dir
+        self.rigidInitial = rigidInitial
         self.rlabels = sitk.ReadImage(
             str(os.path.normpath(self._ref_dir + os.sep + "labels.nii")))
         self.dlabels = sitk.ReadImage(
@@ -142,15 +144,39 @@ class CellMech(object):
         for i in xrange(len(self.rcentroids)):
             # volumetric strains
             self.vstrains.append(self.dvols[i] / self.rvols[i] - 1)
+
             ICP = vtk.vtkIterativeClosestPointTransform()
-            ICP.SetSource(self.rsurfs[i])
-            ICP.SetTarget(self.dsurfs[i])
-            ICP.GetLandmarkTransform().SetModeToAffine()
-            ICP.SetMaximumMeanDistance(0.001)
-            ICP.SetCheckMeanDistance(1)
-            ICP.SetMaximumNumberOfIterations(5000)
-            ICP.StartByMatchingCentroidsOn()
-            ICP.Update()
+            rcopy = vtk.vtkPolyData()
+            dcopy = vtk.vtkPolyData()
+            rcopy.DeepCopy(self.rsurfs[i])
+            dcopy.DeepCopy(self.dsurfs[i])
+            ICP.SetSource(rcopy)
+            ICP.SetTarget(dcopy)
+            if self.rigidInitial:
+                ICP.GetLandmarkTransform().SetModeToRigidBody()
+                ICP.SetMaximumMeanDistance(0.001)
+                ICP.SetCheckMeanDistance(1)
+                ICP.SetMaximumNumberOfIterations(5000)
+                ICP.StartByMatchingCentroidsOn()
+                ICP.Update()
+                trans = vtk.vtkTransform()
+                trans.SetMatrix(ICP.GetMatrix())
+                trans.Update()
+                rot = vtk.vtkTransformPolyDataFilter()
+                rot.SetInputData(rcopy)
+                rot.SetTransform(trans)
+                rot.Update()
+                ICP.GetLandmarkTransform().SetModeToAffine()
+                ICP.SetSource(rot.GetOutput())
+                ICP.Update()
+            else:
+                ICP.GetLandmarkTransform().SetModeToAffine()
+                ICP.SetMaximumMeanDistance(0.001)
+                ICP.SetCheckMeanDistance(1)
+                ICP.SetMaximumNumberOfIterations(5000)
+                ICP.StartByMatchingCentroidsOn()
+                ICP.Update()
+
             F = np.zeros((3, 3), float)
             for j in xrange(3):
                 for k in xrange(3):

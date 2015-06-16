@@ -896,7 +896,7 @@ class Volume(object):
                              ratio=0.4,
                              lambda1=1.0,
                              lambda2=1.1,
-                             curvature=0.0,
+                             curvature=1.0,
                              iterations=20):
         """
         DESCRIPTION
@@ -1004,6 +1004,7 @@ class Volume(object):
                 refine.SetOutputSpacing((newxspace, newyspace))
                 refine.SetOutputDirection(roi.GetDirection())
             rimg = refine.Execute(roi)
+            simg = self.smoothRegion(rimg)
             refine.SetInterpolator(sitk.sitkNearestNeighbor)
             seed = refine.Execute(seed)
             if self.debug:
@@ -1011,7 +1012,7 @@ class Volume(object):
                                 str(os.path.normpath(
                                     self._output_dir + os.sep +
                                     "seed_{:03d}.nii".format(i + 1))))
-            intensity_weighted = sitk.Cast(rimg, sitk.sitkFloat32)
+            intensity_weighted = sitk.Cast(simg, sitk.sitkFloat32)
             phi0 = sitk.SignedMaurerDistanceMap(seed == (i + 1),
                                                 insideIsPositive=False,
                                                 squaredDistance=False,
@@ -1020,6 +1021,7 @@ class Volume(object):
             cv.SetNumberOfIterations(iterations)
             cv.UseImageSpacingOn()
             cv.SetHeavisideStepFunction(0)
+            cv.SetCurvatureWeight(curvature)
             cv.SetLambda1(lambda1)
             cv.SetLambda2(lambda2)
             seg = cv.Execute(sitk.Cast(phi0, sitk.sitkFloat32),
