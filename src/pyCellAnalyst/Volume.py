@@ -881,6 +881,8 @@ class Volume(object):
             resampler.SetReferenceImage(tmp)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             tmp = resampler.Execute(seg)
+            if self.fillholes:
+                tmp = sitk.BinaryFillhole(tmp)
             newcells = sitk.Add(newcells, sitk.Cast(tmp, self._imgType))
             #Handle Overlap
             if self.handle_overlap:
@@ -1043,6 +1045,8 @@ class Volume(object):
             resampler.SetReferenceImage(tmp)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             tmp = resampler.Execute(seg)
+            if self.fillholes:
+                tmp = sitk.BinaryFillhole(tmp)
             newcells = sitk.Add(newcells, sitk.Cast(tmp, self._imgType))
             #Handle Overlap
             if self.handle_overlap:
