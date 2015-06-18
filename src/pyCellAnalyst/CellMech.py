@@ -264,7 +264,7 @@ class CellMech(object):
             #use VTK probe filter to interpolate displacements and strains
             #to 3D meshes of cells and save as UnstructuredGrid (.vtu)
             # to visualize in ParaView; this is a linear interpolation
-            print("...Interpolating displacements and strains to 3D mesh.")
+            print("...Interpolating displacements to 3D mesh.")
             c = self.rmeshes[r]
             probe = vtk.vtkProbeFilter()
             probe.SetInputData(c)
@@ -288,6 +288,7 @@ class CellMech(object):
                                      .format(r + 1))))
             idWriter.SetInputData(self.cell_fields[r])
             idWriter.Write()
+        print("Registration completed.")
 
     def _getECMstrain(self):
         #get the ECM strain
@@ -391,11 +392,15 @@ class CellMech(object):
         #switches:
         # p -
         # q - refine mesh to improve quality
-        #     1.2 minimum ratio/ 15 minimum dihedral angle
+        #     1.2 minimum edge ratio
+        #     minangle=15
         # Y - do not edit surface mesh
         # O - perform mesh optimization
-        #     9 (degree of opimization [0,10])/ 7 perform all operations
-        mesh = build(s, options=Options('pq1.2/15YO9/7'))
+        #     optlevel=9
+        mesh = build(s, options=Options("pq1.2YO",
+                                        optlevel=9,
+                                        minangle=15,
+                                        optpasses=10))
         elements = list(mesh.elements)
         nodes = list(mesh.points)
         faces = np.array(mesh.faces)

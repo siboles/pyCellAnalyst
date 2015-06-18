@@ -675,7 +675,7 @@ class Volume(object):
                 if self.two_dim:
                     self.thresholds.append(tlist)
                 else:
-                    self.treshold.append(t)
+                    self.thresholds.append(t)
 
             tmp = sitk.Image(self._img.GetSize(), self._imgType)
             tmp.SetSpacing(self._img.GetSpacing())
