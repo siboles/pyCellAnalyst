@@ -1245,6 +1245,7 @@ class Application(Frame):
                         "Volumetric, Effective, Maximum Tensile, "
                         "Maximum Compressive, Maximum Shear\n"))
             if np.any(mech.ecm_strain):
+                N = len(mech.ecm_strain)
                 ecm_w, ecm_v = np.linalg.eigh(mech.ecm_strain)
                 ecm_w = np.sort(ecm_w)
                 tissue_tensile = ecm_w[2]
@@ -1270,6 +1271,7 @@ class Application(Frame):
                     fig1, ax1 = plt.subplots()
                     fig1.set_size_inches([3.5, 3.5])
                     width = 0.2
+                    ind = np.arange(N)
                     rects1 = ax1.bar(0, tissue_compressive, width, color='r')
                     rects2 = ax1.bar(
                         width, tissue_tensile, width, color='y')
