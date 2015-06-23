@@ -112,6 +112,7 @@ class CellMech(object):
                     .format(i))), 'wb')
                 pickle.dump(fea, fid)
                 fid.close()
+        print("Analysis of {:s} completed...".format(self._def_dir))
 
     def _readstls(self):
         "Read in STL files if self.surfaces is True"
@@ -182,8 +183,6 @@ class CellMech(object):
                 for k in xrange(3):
                     F[j, k] = ICP.GetMatrix().GetElement(j, k)
             E = 0.5 * (np.dot(F.T, F) - np.eye(3))
-            v_err = np.linalg.det(F) - (self.vstrains[-1] + 1)
-            print "Error in Cell %d volume" % i, v_err
             self.cell_strains.append(E)
 
     def deformableRegistration(self):

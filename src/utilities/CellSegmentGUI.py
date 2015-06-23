@@ -11,7 +11,10 @@ import datetime
 import string
 from pyCellAnalyst import (Volume, CellMech)
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from collections import OrderedDict
 
 
 class Application(Frame):
@@ -1221,6 +1224,10 @@ class Application(Frame):
         #ellipsoidal approximation
         efid = open(pardir + os.sep + "Ellipsoidal_Analysis" + ts
                     + ".csv", 'w')
+        if self.intSettings["makePlots"].get():
+            self.results = OrderedDict()
+            self.results["Tissue"] = OrderedDict()
+
         for i, d in enumerate(self.spatialDirectories):
             shortname = d.split(os.sep)[-1]
             try:
@@ -1239,7 +1246,6 @@ class Application(Frame):
                                     'deformableRMS'].get(),
                                 'Displacement Smoothing': self.settings[
                                     'deformableSigma'].get()})
-
             ofid.write(d + '\n')
             ofid.write(("Object ID, E11, E22, E33, E12, E13, E23, "
                         "Volumetric, Effective, Maximum Tensile, "
@@ -1268,42 +1274,21 @@ class Application(Frame):
                                    tissue_compressive,
                                    tissue_shear))
                 if self.intSettings['makePlots'].get():
-                    fig1, ax1 = plt.subplots()
-                    fig1.set_size_inches([3.5, 3.5])
-                    width = 0.2
-                    ind = np.arange(N)
-                    rects1 = ax1.bar(0, tissue_compressive, width, color='r')
-                    rects2 = ax1.bar(
-                        width, tissue_tensile, width, color='y')
-                    rects3 = ax1.bar(2 * width,
-                                     tissue_shear, width, color='g')
-                    rects4 = ax1.bar(3 * width, tissue_vol, width, color='b')
-                    ax1.set_ylabel('Green-Lagrange Strains')
-                    ax1.set_title('Tissue Deformation ' + shortname)
-                    ax1.set_xticks(ind + 2 * width)
-                    box = ax1.get_position()
-                    ax1.set_position([box.x0, box.y0 + box.height * 0.1,
-                                      box.width, box.height * 0.9])
-                    ax1.legend((rects1[0], rects2[0], rects3[0], rects4[0]),
-                               ('Compression', 'Tension',
-                                'Shear', 'Volume'),
-                               loc='upper center',
-                               bbox_to_anchor=(0.5, -0.05), ncol=2)
-                    ax1.axhline(y=0.0, color='k')
-
-                    fig1.savefig(pardir + os.sep + "Tissue_" +
-                                 shortname + ts + ".svg", bbox='tight')
+                    self.results["Tissue"][shortname] = OrderedDict([
+                        ("Max Compression", tissue_compressive),
+                        ("Max Tension", tissue_tensile),
+                        ("Max Shear", tissue_shear),
+                        ("Volume", tissue_vol)])
 
             N = len(mech.cell_strains)
-            max_tension = np.zeros(N, float)
-            max_compression = np.zeros(N, float)
-            max_shear = np.zeros(N, float)
+            if i == 0 and self.intSettings["makePlots"].get():
+                for j in xrange(N):
+                    self.results[
+                        "Cell {:d}".format(j + 1)] = OrderedDict()
+
             for j, c in enumerate(mech.cell_strains):
                 w, v = np.linalg.eigh(c)
                 w = np.sort(w)
-                max_tension[j] = w[2]
-                max_compression[j] = w[0]
-                max_shear[j] = 0.5 * np.abs(w[2] - w[0])
                 ofid.write(("Cell {:d}, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, "
                             "{:f}, {:f}, {:f}, {:f}, {:f}\n")
                            .format(j + 1,
@@ -1319,48 +1304,20 @@ class Application(Frame):
                                            (w[2] - w[0]) ** 2),
                                    w[2],
                                    w[0],
-                                   max_shear[j]))
-            if self.intSettings['makePlots'].get():
-                fig2, ax2 = plt.subplots()
-                fig2.set_size_inches([3.5, 3.5])
-                ind = np.arange(N)
-                width = 0.2
-                rects1 = ax2.bar(ind, max_compression, width, color='r')
-                rects2 = ax2.bar(ind + width, max_tension,
-                                 width, color='y')
-                rects3 = ax2.bar(ind + 2 * width,
-                                 max_shear, width, color='g')
-                rects4 = ax2.bar(ind + 3 * width, mech.vstrains,
-                                 width, color='b')
-                ax2.set_ylabel('Green-Lagrange Strain')
-                ax2.set_title('Homogeneous Analysis ' + shortname)
-                ax2.set_xticks(ind + 2 * width)
-                xlabels = []
-                for j in xrange(N):
-                    xlabels.append("Cell {:d}".format(j + 1))
-                ax2.set_xticklabels(xlabels)
-                box = ax2.get_position()
-                ax2.set_position([box.x0, box.y0 + box.height * 0.1,
-                                  box.width, box.height * 0.9])
-                ax2.legend((rects1[0], rects2[0], rects3[0], rects4[0]),
-                           ('Compression', 'Tension',
-                            'Shear', 'Volume'),
-                           loc='upper center',
-                           bbox_to_anchor=(0.5, -0.05), ncol=2)
-                ax2.axhline(y=0.0, color='k')
-                fig2.savefig(pardir + os.sep + "Kinematics_" +
-                             shortname + ts + ".svg", bbox='tight')
-
+                                   0.5 * np.abs(w[2] - w[0])))
+                if self.intSettings["makePlots"].get():
+                    key = "Cell {:d}".format(j + 1)
+                    self.results[key][shortname] = OrderedDict([
+                        ("Max Compression", w[2]),
+                        ("Max Tension", w[0]),
+                        ("Max Shear", 0.5 * np.abs(w[2] - w[0])),
+                        ("Volume", mech.vstrains[j])])
             efid.write(d + '\n')
             efid.write(("Object ID, Reference Major Axis, Reference Middle "
                         "Axis, Reference Minor Axis, Deformed Major Axis, "
                         "Deformed Middle Axis, Deformed Minor Axis, Reference"
                         " Volume, Deformed Volume\n"))
-            N = len(mech.rvols)
-            width_strains = np.zeros(N, float)
-            height_strains = np.zeros(N, float)
-            depth_strains = np.zeros(N, float)
-            vol_strains = np.zeros(N, float)
+
             for j, (rvol, dvol, raxes, daxes) in enumerate(
                     zip(mech.rvols, mech.dvols, mech.raxes, mech.daxes)):
                 raxes = np.sort(raxes)
@@ -1375,44 +1332,76 @@ class Application(Frame):
                                                     daxes[0],
                                                     rvol,
                                                     dvol))
-                width_strains[j] = daxes[2] / raxes[2] - 1
-                depth_strains[j] = daxes[1] / raxes[1] - 1
-                height_strains[j] = daxes[0] / raxes[0] - 1
-                vol_strains[j] = dvol / rvol - 1
 
-            if self.intSettings['makePlots'].get():
-                fig3, ax3 = plt.subplots()
-                fig3.set_size_inches([3.5, 3.5])
-                ind = np.arange(N)
-                width = 0.2
-                rects1 = ax3.bar(ind, height_strains, width, color='r')
-                rects2 = ax3.bar(ind + width, width_strains, width, color='y')
-                rects3 = ax3.bar(ind + 2 * width,
-                                 depth_strains, width, color='g')
-                rects4 = ax3.bar(ind + 3 * width, vol_strains,
-                                 width, color='b')
-                ax3.set_ylabel('Nominal Strain')
-                ax3.set_title('Ellipsoidal Analysis ' + shortname)
-                ax3.set_xticks(ind + 2 * width)
-                xlabels = []
-                for j in xrange(N):
-                    xlabels.append("Cell {:d}".format(j + 1))
-                ax3.set_xticklabels(xlabels)
-                box = ax3.get_position()
-                ax3.set_position([box.x0, box.y0 + box.height * 0.1,
-                                  box.width, box.height * 0.9])
-                ax3.legend((rects1[0], rects2[0], rects3[0], rects4[0]),
-                           ('Height', 'Width', 'Depth', 'Volume'),
-                           loc='upper center',
-                           bbox_to_anchor=(0.5, -0.05), ncol=2)
-                ax3.axhline(y=0.0, color='k')
-
-                fig3.savefig(pardir + os.sep + "Ellipsoidal_" +
-                             shortname + ts + ".svg", bbox='tight')
-                plt.show()
+                if self.intSettings['makePlots'].get():
+                    key = "Cell {:d}".format(j + 1)
+                    self.results[key][shortname]["Height"] = (daxes[0] /
+                                                              raxes[0] - 1)
+                    self.results[key][shortname]["Depth"] = (daxes[1] /
+                                                             raxes[1] - 1)
+                    self.results[key][shortname]["Width"] = (daxes[2] /
+                                                             raxes[2] - 1)
+        if self.intSettings['makePlots'].get():
+            self.makePlots(ts)
 
         ofid.close()
         efid.close()
+
+    def makePlots(self, ts):
+        pardir = os.path.dirname(self.spatialDirectories[0])
+        for k in self.results.keys():
+            if not(self.results[k].keys()):
+                continue
+            fig, ax = plt.subplots()
+            fig.set_size_inches([3.34646, 3.34646])
+            N = len(self.results[k].keys())
+            ind = np.arange(4)
+            width = 0.8 / float(N)
+            cm = plt.get_cmap('jet')
+            colors = plt.cm.Set3(np.linspace(0, 1, N))
+            plt.rcParams.update({'font.size': 8})
+            rects = []
+            # affine transformation approach
+            for j, case in enumerate(self.results[k].keys()):
+                dat = np.array([self.results[k][case]["Max Compression"],
+                                self.results[k][case]["Max Tension"],
+                                self.results[k][case]["Max Shear"],
+                                self.results[k][case]["Volume"]]).ravel()
+                rects.append(ax.bar(ind + j * width, dat, width,
+                                    color=colors[j], label=case))
+            ax.set_ylabel('Green-Lagrange Strain')
+            ax.set_title(k)
+            ax.set_xticks(np.arange(4) + 0.4)
+            ax.set_xticklabels(['Compression', 'Tension', 'Shear', 'Volume'])
+            ax.axhline(y=0.0, color='k')
+            fig.savefig(string.join([pardir, os.sep, "Kinematics_",
+                                     k, "_", ts, ".svg"], ''))
+            # ellipsoidal approach
+            fig2, ax2 = plt.subplots()
+            fig2.set_size_inches([3.34646, 3.34646])
+            rects = []
+            for j, case in enumerate(self.results[k].keys()):
+                dat = np.array([self.results[k][case]["Height"],
+                                self.results[k][case]["Width"],
+                                self.results[k][case]["Depth"],
+                                self.results[k][case]["Volume"]]).ravel()
+                rects.append(ax2.bar(ind + j * width, dat, width,
+                                     color=colors[j], label=case))
+            ax2.set_ylabel('Green-Lagrange Strain')
+            ax2.set_title(k)
+            ax2.set_xticks(np.arange(4) + 0.4)
+            ax2.set_xticklabels(['Height', 'Width', 'Depth', 'Volume'])
+            ax2.axhline(y=0.0, color='k')
+            fig2.savefig(string.join([pardir, os.sep, "Ellipsoidal_",
+                                      k, "_", ts, ".svg"], ''))
+        figLegend1 = plt.figure()
+        plt.figlegend(*ax.get_legend_handles_labels(), loc='upper left')
+        figLegend1.savefig(string.join(
+            [pardir, os.sep, "Kinematics_Legend_", ts, ".svg"], ''))
+        figLegend2 = plt.figure()
+        plt.figlegend(*ax.get_legend_handles_labels(), loc='upper left')
+        figLegend2.savefig(string.join(
+            [pardir, os.sep, "Ellipsoidal_Legend_", ts, ".svg"], ''))
 
     def open_smoothing_reference(self, *args):
         webbrowser.open_new(self.smoothingLink)
