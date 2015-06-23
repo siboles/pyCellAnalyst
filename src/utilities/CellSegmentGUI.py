@@ -1227,7 +1227,7 @@ class Application(Frame):
         if self.intSettings["makePlots"].get():
             self.results = OrderedDict()
             self.results["Tissue"] = OrderedDict()
-
+            self.aggregate = OrderedDict()
         for i, d in enumerate(self.spatialDirectories):
             shortname = d.split(os.sep)[-1]
             try:
@@ -1285,6 +1285,15 @@ class Application(Frame):
                 for j in xrange(N):
                     self.results[
                         "Cell {:d}".format(j + 1)] = OrderedDict()
+            if self.intSettings["makePlots"].get():
+                self.aggregate[shortname] = OrderedDict([
+                    ("Max Compression", np.zeros(N, float)),
+                    ("Max Tension", np.zeros(N, float)),
+                    ("Max Shear", np.zeros(N, float)),
+                    ("Volume", np.zeros(N, float)),
+                    ("Height", np.zeros(N, float)),
+                    ("Width", np.zeros(N, float)),
+                    ("Depth", np.zeros(N, float))])
 
             for j, c in enumerate(mech.cell_strains):
                 w, v = np.linalg.eigh(c)
@@ -1312,6 +1321,12 @@ class Application(Frame):
                         ("Max Tension", w[0]),
                         ("Max Shear", 0.5 * np.abs(w[2] - w[0])),
                         ("Volume", mech.vstrains[j])])
+                    self.aggregate[shortname]['Max Compression'][j] = w[2]
+                    self.aggregate[shortname]['Max Tension'][j] = w[0]
+                    self.aggregate[shortname]['Max Shear'][j] = 0.5 * np.abs(
+                        w[2] - w[0])
+                    self.aggregate[shortname]['Volume'][j] = mech.vstrains[j]
+
             efid.write(d + '\n')
             efid.write(("Object ID, Reference Major Axis, Reference Middle "
                         "Axis, Reference Minor Axis, Deformed Major Axis, "
@@ -1341,6 +1356,13 @@ class Application(Frame):
                                                              raxes[1] - 1)
                     self.results[key][shortname]["Width"] = (daxes[2] /
                                                              raxes[2] - 1)
+                    self.aggregate[shortname]['Height'][j] = (daxes[0] /
+                                                              raxes[0] - 1)
+                    self.aggregate[shortname]['Depth'][j] = (daxes[1] /
+                                                             raxes[1] - 1)
+                    self.aggregate[shortname]['Width'][j] = (daxes[2] /
+                                                             raxes[2] - 1)
+
         if self.intSettings['makePlots'].get():
             self.makePlots(ts)
 
@@ -1349,6 +1371,20 @@ class Application(Frame):
 
     def makePlots(self, ts):
         pardir = os.path.dirname(self.spatialDirectories[0])
+        #boxplots of all cells for different cases
+        N = len(self.aggregate.keys())
+        M = len(self.aggregate.values()[0]["Height"])
+        for m in self.aggregate.values()[0].keys():
+            data = np.zeros((M, N), float)
+            for j, k in enumerate(self.aggregate.keys()):
+                data[:, j] = self.aggregate[k][m]
+            fig, ax = plt.subplots()
+            ax.boxplot(data)
+            ax.set_xticklabels(self.aggregate.keys())
+            ax.set_ylabel(m + " Strain")
+            fig.savefig(string.join([pardir, os.sep, "AllCells_",
+                                     m, "_", ts, ".svg"], ''))
+
         for k in self.results.keys():
             if not(self.results[k].keys()):
                 continue
