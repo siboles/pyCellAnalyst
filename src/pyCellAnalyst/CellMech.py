@@ -96,11 +96,15 @@ class CellMech(object):
 
         self.getDimensions()
         self._readstls()
+        if not(self.rsurfs):
+            raise Exception(("No 3D surfaces detected. Currently 2D analysis "
+                             "is not supported, so nothing was done."))
         self._getECMstrain()
         self._deform()
 
         if self.deformable:
             self.deformableRegistration()
+        # no support for 2D FEA yet
         if self.saveFEA:
             for i, bc in enumerate(self._bcs):
                 fea = {'nodes': self._nodes[i],
@@ -126,7 +130,7 @@ class CellMech(object):
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
                 self.rsurfs.append(triangles.GetOutput())
-                if self.deformable:
+                if self.deformable and self.dim == 3:
                     self._make3Dmesh(
                         str(os.path.normpath(self._ref_dir + os.sep + fname)))
 

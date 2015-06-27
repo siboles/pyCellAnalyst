@@ -1105,58 +1105,68 @@ class Volume(object):
         return cells
 
     def writeSurfaces(self):
+        '''
         if self._img.GetDimension() == 2:
             print(("WARNING: A 2D image was processed, "
                    "so there are no surfaces to write."))
             return
+        '''
         #delete old surfaces
         old_surfaces = fnmatch.filter(os.listdir(self._output_dir), '*.stl')
         for f in old_surfaces:
             os.remove(self._output_dir + os.sep + f)
         #create and write the STLs
         stl = vtk.vtkSTLWriter()
+        polywriter = vtk.vtkPolyDataWriter()
         for i, c in enumerate(self._regions):
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(self.cells)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-            roi = sitk.RegionOfInterest(self.cells == (i + 1), c[3:], c[0:3])
+            if self._img.GetDimension() == 3:
+                roi = sitk.RegionOfInterest(self.cells == (i + 1),
+                                            c[3:], c[0:3])
+                spacing = self._pixel_dim
+                extent = [0, self._img.GetSize()[0],
+                          0, self._img.GetSize()[1],
+                          0, self._img.GetSize()[2]]
+                iso = vtk.vtkImageMarchingCubes()
+            else:
+                roi = sitk.RegionOfInterest(self.cells == (i + 1),
+                                            c[3:5], c[0:2])
+                spacing = self._pixel_dim + [1]
+                extent = [0, self._img.GetSize()[0],
+                          0, self._img.GetSize()[1],
+                          0, 0]
+                iso = vtk.vtkMarchingSquares()
             roi = sitk.BinaryDilate(roi, 2)
             if not(self.levelsets):
-                smoothed = sitk.Cast(roi, sitk.sitkFloat32) * self.smoothed[i]
+                smoothed = sitk.Cast(roi,
+                                     sitk.sitkFloat32) * self.smoothed[i]
                 resampler.SetInterpolator(sitk.sitkBSpline)
                 smoothlabel = resampler.Execute(smoothed)
                 a = vti.vtkImageImportFromArray()
-                a.SetDataSpacing([self._pixel_dim[0],
-                                  self._pixel_dim[1],
-                                  self._pixel_dim[2]])
-                a.SetDataExtent([0, self._img.GetSize()[0],
-                                 0, self._img.GetSize()[1],
-                                 0, self._img.GetSize()[2]])
+                a.SetDataSpacing(spacing)
+                a.SetDataExtent(extent)
                 n = sitk.GetArrayFromImage(smoothlabel)
                 a.SetArray(n)
                 a.Update()
 
-                iso = vtk.vtkImageMarchingCubes()
                 iso.SetInputData(a.GetOutput())
                 iso.SetValue(0, self.thresholds[i])
                 iso.Update()
+
             else:
                 lvlset = resampler.Execute(self.levelsets[i])
                 lvl_roi = sitk.RegionOfInterest(lvlset, c[3:], c[0:3])
                 lvlset = sitk.Cast(roi, sitk.sitkFloat32) * lvl_roi
                 lvl_label = resampler.Execute(lvlset)
                 a = vti.vtkImageImportFromArray()
-                a.SetDataSpacing([self._pixel_dim[0],
-                                  self._pixel_dim[1],
-                                  self._pixel_dim[2]])
-                a.SetDataExtent([0, self._img.GetSize()[0],
-                                 0, self._img.GetSize()[1],
-                                 0, self._img.GetSize()[2]])
+                a.SetDataSpacing(spacing)
+                a.SetDataExtent(extent)
                 n = sitk.GetArrayFromImage(lvl_label)
                 a.SetArray(n)
                 a.Update()
 
-                iso = vtk.vtkImageMarchingCubes()
                 iso.SetInputData(a.GetOutput())
                 if self.active == "Geodesic":
                     iso.SetValue(0, -1e-7)
@@ -1167,6 +1177,7 @@ class Volume(object):
             triangles = vtk.vtkGeometryFilter()
             triangles.SetInputConnection(iso.GetOutputPort())
             triangles.Update()
+
             '''
             #fill holes
             fill = vtk.vtkFillHolesFilter()
@@ -1181,18 +1192,28 @@ class Volume(object):
             flip.SetInputConnection(fill.GetOutputPort())
             flip.Update()
             '''
-            smooth = vtk.vtkWindowedSincPolyDataFilter()
-            smooth.SetNumberOfIterations(100)
-            smooth.SetInputConnection(triangles.GetOutputPort())
-            smooth.Update()
+            if self._img.GetDimension() == 3:
+                smooth = vtk.vtkWindowedSincPolyDataFilter()
+                smooth.SetNumberOfIterations(100)
+                smooth.SetInputConnection(triangles.GetOutputPort())
+                smooth.Update()
+                self.surfaces.append(smooth.GetOutput())
+                filename = 'cell{:02d}.stl'.format(i + 1)
+                stl.SetFileName(
+                    str(os.path.normpath(self._output_dir +
+                                         os.sep + filename)))
+                stl.SetInputData(self.surfaces[-1])
+                stl.Write()
+            else:
+                self.surfaces.append(triangles.GetOutput())
+                filename = 'cell{:0d}.vtk'.format(i + 1)
+                polywriter.SetFileName(
+                    str(os.path.normpath(self._output_dir +
+                                         os.sep + filename)))
+                polywriter.SetInputData(self.surfaces[-1])
+                polywriter.Write()
 
-            self.surfaces.append(smooth.GetOutput())
-            filename = 'cell{:02d}.stl'.format(i + 1)
-            stl.SetFileName(
-                str(os.path.normpath(self._output_dir + os.sep + filename)))
-            stl.SetInputData(self.surfaces[-1])
-            stl.Write()
-        if self.display:
+        if self.display and self._img.GetDimension() == 3:
             N = len(self.surfaces)
             colormap = vtk.vtkLookupTable()
             colormap.SetHueRange(0.9, 0.1)
