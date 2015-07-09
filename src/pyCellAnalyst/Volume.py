@@ -488,12 +488,7 @@ class Volume(object):
                 simg = self.smooth2D(roi)
             else:
                 simg = self.smoothRegion(roi)
-            self.smoothed.append(simg)
-            if self.debug:
-                sitk.WriteImage(sitk.Cast(simg, self._imgType),
-                                str(os.path.normpath(
-                                    self._output_dir + os.sep +
-                                    "smoothed_{:03d}.nii".format(i + 1))))
+
             print("\n------------------")
             print("Segmenting Cell {:d}".format(i + 1))
             print("------------------\n")
@@ -605,9 +600,12 @@ class Volume(object):
                         if dist < d:
                             d = dist
                             label = l + 1
-
-                    bb = labelstats['bounding box'][label - 1]
-                    vol = labelstats['volume'][label - 1]
+                    # if exception here, then threshold adjusted too much
+                    # and previous increment will be taken
+                    try:
+                        bb = labelstats['bounding box'][label - 1]
+                    except:
+                        break
 
                     if dimension == 3:
                         label_bounds = [(bb[0], bb[0] + bb[3]),
@@ -627,31 +625,10 @@ class Volume(object):
                             seg = sitk.BinaryThreshold(simg, 0, int(newt))
                     else:
                         break
-                #Handle if adaptive threshold completely eliminates object
-                #Replace with a sphere of radius 2 at ROI centroid
-                if vol / np.prod(self._pixel_dim) < 8:
-                    tmp = np.zeros(seg.GetSize(), np.uint8)
-                    tmp_cent = np.array(tmp.shape, dtype=np.uint32) / 2
-                    r = np.arange(-2, 3) ** 2
-                    dist2 = r[:, None, None] + r[:, None] + r
-                    dist2 = dist2 <= 4
-                    tmp[tmp_cent[0] - 2:tmp_cent[0] + 3,
-                        tmp_cent[1] - 2:tmp_cent[1] + 3,
-                        tmp_cent[2] - 2:tmp_cent[2] + 3] = dist2
-                    tmp = sitk.GetImageFromArray(tmp)
-                    tmp.SetSpacing(seg.GetSpacing())
-                    tmp.SetOrigin(seg.GetOrigin())
-                    tmp.SetDirection(seg.GetDirection())
-                    seg = tmp
-                    print(("... ... Threshold failed to separate objects. "
-                           "A sphere with radius=2 will serve as seed for "
-                           "active contour segmentation.\n"
-                           "If an active contour method is not selected, "
-                           "please restart and do so."))
-                else:
-                    if not(newt == t):
-                        print(("... ... Adjusted the threshold to: "
-                              "{:d}".format(int(newt))))
+
+                if not(newt == t):
+                    print(("... ... Adjusted the threshold to: "
+                          "{:d}".format(int(newt))))
                 self.thresholds.append(newt)
             else:
                 if self.opening:
@@ -673,7 +650,7 @@ class Volume(object):
                         d = dist
                         label = l + 1
                 if self.two_dim:
-                    self.thresholds.append(tlist)
+                    self.thresholds.append(np.max(tlist))
                 else:
                     self.thresholds.append(t)
 
@@ -686,6 +663,15 @@ class Volume(object):
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             tmp = resampler.Execute((r == label) * (i + 1))
             self.cells = sitk.Add(self.cells, sitk.Cast(tmp, self._imgType))
+            # scale smoothed image if independent slices option flagged
+            if self.two_dim:
+                simg = self.scale2D(simg, tlist)
+            self.smoothed.append(simg)
+            if self.debug:
+                sitk.WriteImage(sitk.Cast(simg, self._imgType),
+                                str(os.path.normpath(
+                                    self._output_dir + os.sep +
+                                    "smoothed_{:03d}.nii".format(i + 1))))
             #Test for overlap
             if self.handle_overlap:
                 maxlabel = self._getMinMax(self.cells)[1]
@@ -780,7 +766,7 @@ class Volume(object):
                 seed = sitk.RegionOfInterest(self.cells,
                                              region[3:],
                                              region[0:3])
-                roi = sitk.RegionOfInterest(self._img, region[3:], region[0:3])
+                roi = self.smoothed[i]
                 #resample the Region of Interest to improve resolution of
                 #derivatives and give closer to isotropic voxels
                 zratio = self._pixel_dim[2] / self._pixel_dim[0]
@@ -800,14 +786,12 @@ class Volume(object):
                 refine.SetOutputOrigin(roi.GetOrigin())
                 refine.SetOutputSpacing((newxspace, newyspace, newzspace))
                 refine.SetOutputDirection(roi.GetDirection())
-                rimg = refine.Execute(roi)
+                simg = refine.Execute(roi)
             else:
                 seed = sitk.RegionOfInterest(self.cells,
                                              region[3:5],
                                              region[0:2])
-                roi = sitk.RegionOfInterest(self._img,
-                                            region[3:5],
-                                            region[0:2])
+                roi = self.smoothed[i]
                 #resample the Region of Interest to improve resolution
                 #of derivatives
                 newx = roi.GetSize()[0] * upsampling
@@ -821,57 +805,59 @@ class Volume(object):
                 refine.SetOutputOrigin(roi.GetOrigin())
                 refine.SetOutputSpacing((newxspace, newyspace))
                 refine.SetOutputDirection(roi.GetDirection())
-                rimg = refine.Execute(roi)
+                simg = refine.Execute(roi)
             refine.SetInterpolator(sitk.sitkNearestNeighbor)
             seed = refine.Execute(seed)
             #smooth the perimeter of the binary seed
             seed = sitk.BinaryMorphologicalClosing(seed == (i + 1), 3)
             seed = sitk.AntiAliasBinary(seed)
             seed = sitk.BinaryThreshold(seed, 0.5, 1e7)
-            #Smooth the resampled image
-            simg = self.smoothRegion(rimg)
-            canny = sitk.CannyEdgeDetection(
-                sitk.Cast(simg, sitk.sitkFloat32),
-                lowerThreshold=cannyLower,
-                upperThreshold=cannyUpper,
-                variance=canny_variance)
+            if self.two_dim and dimension == 3:
+                seg = self.geodesic2D(seed, simg,
+                                      cannyLower, cannyUpper, canny_variance,
+                                      upsampling, active_iterations, rms,
+                                      propagation, curvature, advection)
+            else:
+                canny = sitk.CannyEdgeDetection(
+                    sitk.Cast(simg, sitk.sitkFloat32),
+                    lowerThreshold=cannyLower,
+                    upperThreshold=cannyUpper,
+                    variance=canny_variance)
 
-            canny = sitk.InvertIntensity(canny, 1)
-            canny = sitk.Cast(canny, sitk.sitkFloat32)
-            if self.debug:
-                sitk.WriteImage(sitk.Cast(simg, self._imgType),
-                                str(os.path.normpath(
-                                    self._output_dir +
-                                    os.sep + "smoothed_{:03d}.nii"
-                                    .format(i + 1))))
-                sitk.WriteImage(sitk.Cast(seed, self._imgType),
-                                str(os.path.normpath(
-                                    self._output_dir +
-                                    os.sep + "seed_{:03d}.nii"
-                                    .format(i + 1))))
-                sitk.WriteImage(sitk.Cast(canny, self._imgType),
-                                str(os.path.normpath(
-                                    self._output_dir +
-                                    os.sep + "edge_{:03d}.nii"
-                                    .format(i + 1))))
-            d = sitk.SignedMaurerDistanceMap(seed, insideIsPositive=False,
-                                             squaredDistance=False,
-                                             useImageSpacing=True)
-            d = sitk.BinaryThreshold(d, -1e7, -0.5)
-            d = sitk.Cast(d, canny.GetPixelIDValue()) * (-1.0) + 0.5
-            gd = sitk.GeodesicActiveContourLevelSetImageFilter()
-            gd.SetMaximumRMSError(rms / float(upsampling))
-            gd.SetNumberOfIterations(active_iterations)
-            gd.SetPropagationScaling(propagation)
-            gd.SetCurvatureScaling(curvature)
-            gd.SetAdvectionScaling(advection)
-            seg = gd.Execute(d, canny)
+                canny = sitk.InvertIntensity(canny, 1)
+                canny = sitk.Cast(canny, sitk.sitkFloat32)
+                if self.debug:
+                    sitk.WriteImage(sitk.Cast(simg, self._imgType),
+                                    str(os.path.normpath(
+                                        self._output_dir +
+                                        os.sep + "smoothed_{:03d}.nii"
+                                        .format(i + 1))))
+                    sitk.WriteImage(sitk.Cast(seed, self._imgType),
+                                    str(os.path.normpath(
+                                        self._output_dir +
+                                        os.sep + "seed_{:03d}.nii"
+                                        .format(i + 1))))
+                    sitk.WriteImage(sitk.Cast(canny, self._imgType),
+                                    str(os.path.normpath(
+                                        self._output_dir +
+                                        os.sep + "edge_{:03d}.nii"
+                                        .format(i + 1))))
+                d = sitk.SignedMaurerDistanceMap(seed, insideIsPositive=False,
+                                                 squaredDistance=False,
+                                                 useImageSpacing=True)
+                gd = sitk.GeodesicActiveContourLevelSetImageFilter()
+                gd.SetMaximumRMSError(rms / float(upsampling))
+                gd.SetNumberOfIterations(active_iterations)
+                gd.SetPropagationScaling(propagation)
+                gd.SetCurvatureScaling(curvature)
+                gd.SetAdvectionScaling(advection)
+                seg = gd.Execute(d, canny)
+                print("... Geodesic Active Contour Segmentation Completed")
+                print("... ... Elapsed Iterations: {:d}"
+                      .format(gd.GetElapsedIterations()))
+                print("... ... Change in RMS Error: {:.3e}"
+                      .format(gd.GetRMSChange()))
             self.levelsets.append(seg)
-            print("... Geodesic Active Contour Segmentation Completed")
-            print("... ... Elapsed Iterations: {:d}"
-                  .format(gd.GetElapsedIterations()))
-            print("... ... Change in RMS Error: {:.3e}"
-                  .format(gd.GetRMSChange()))
             seg = sitk.BinaryThreshold(seg, -1e7, 0) * (i + 1)
             tmp = sitk.Image(self._img.GetSize(), self._imgType)
             tmp.SetSpacing(self._img.GetSpacing())
@@ -963,9 +949,7 @@ class Volume(object):
                 seed = sitk.RegionOfInterest(self.cells,
                                              region[3:],
                                              region[0:3])
-                roi = sitk.RegionOfInterest(self._img,
-                                            region[3:],
-                                            region[0:3])
+                roi = self.smoothed[i]
                 #resample the Region of Interest to improve resolution
                 #of derivatives and give closer to isotropic voxels
                 zratio = self._pixel_dim[2] / self._pixel_dim[0]
@@ -985,13 +969,12 @@ class Volume(object):
                 refine.SetOutputOrigin(roi.GetOrigin())
                 refine.SetOutputSpacing((newxspace, newyspace, newzspace))
                 refine.SetOutputDirection(roi.GetDirection())
+                simg = refine.Execute(roi)
             else:
                 seed = sitk.RegionOfInterest(self.cells,
                                              region[3:5],
                                              region[0:2])
-                roi = sitk.RegionOfInterest(self._img,
-                                            region[3:5],
-                                            region[0:2])
+                roi = self.smoothed[i]
                 #resample the Region of Interest to improve resolution
                 #of derivatives
                 newx = roi.GetSize()[0] * upsampling
@@ -1005,29 +988,51 @@ class Volume(object):
                 refine.SetOutputOrigin(roi.GetOrigin())
                 refine.SetOutputSpacing((newxspace, newyspace))
                 refine.SetOutputDirection(roi.GetDirection())
-            rimg = refine.Execute(roi)
-            simg = self.smoothRegion(rimg)
+                simg = refine.Execute(roi)
             refine.SetInterpolator(sitk.sitkNearestNeighbor)
             seed = refine.Execute(seed)
+            #smooth the perimeter of the binary seed
+            seed = sitk.BinaryMorphologicalClosing(seed == (i + 1), 3)
+            seed = sitk.AntiAliasBinary(seed)
+            seed = sitk.BinaryThreshold(seed, 0.5, 1e7)
             if self.debug:
                 sitk.WriteImage(sitk.Cast(seed, self._imgType),
                                 str(os.path.normpath(
                                     self._output_dir + os.sep +
                                     "seed_{:03d}.nii".format(i + 1))))
-            intensity_weighted = sitk.Cast(simg, sitk.sitkFloat32)
-            phi0 = sitk.SignedMaurerDistanceMap(seed == (i + 1),
-                                                insideIsPositive=False,
-                                                squaredDistance=False,
-                                                useImageSpacing=True)
+
             cv = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
             cv.SetNumberOfIterations(iterations)
             cv.UseImageSpacingOn()
-            cv.SetHeavisideStepFunction(0)
+            cv.SetHeavisideStepFunction(1)
+            cv.SetEpsilon(upsampling)
             cv.SetCurvatureWeight(curvature)
             cv.SetLambda1(lambda1)
             cv.SetLambda2(lambda2)
-            seg = cv.Execute(sitk.Cast(phi0, sitk.sitkFloat32),
-                             intensity_weighted)
+            if self.two_dim and dimension == 3:
+                stack = []
+                size = simg.GetSize()
+                for sl in xrange(size[2]):
+                    im = sitk.Extract(simg, [size[0], size[1], 0], [0, 0, sl])
+                    s = sitk.Extract(seed, [size[0], size[1], 0], [0, 0, sl])
+                    phi0 = sitk.SignedMaurerDistanceMap(s,
+                                                        insideIsPositive=False,
+                                                        squaredDistance=False,
+                                                        useImageSpacing=True)
+                    stack.append(cv.Execute(phi0, sitk.Cast(im,
+                                                            sitk.sitkFloat32)))
+                seg = sitk.JoinSeries(stack)
+                seg.SetSpacing(simg.GetSpacing())
+                seg.SetOrigin(simg.GetOrigin())
+                seg.SetDirection(simg.GetDirection())
+            else:
+                phi0 = sitk.SignedMaurerDistanceMap(seed,
+                                                    insideIsPositive=False,
+                                                    squaredDistance=False,
+                                                    useImageSpacing=True)
+
+                seg = cv.Execute(phi0,
+                                 sitk.Cast(simg, sitk.sitkFloat32))
             self.levelsets.append(seg)
             seg = sitk.BinaryThreshold(seg, 1e-7, 1e7)
             #Get connected regions
@@ -1138,7 +1143,7 @@ class Volume(object):
                           0, self._img.GetSize()[1],
                           0, 0]
                 iso = vtk.vtkMarchingSquares()
-            roi = sitk.BinaryDilate(roi, 2)
+            roi = sitk.BinaryDilate(roi, 1)
             if not(self.levelsets):
                 smoothed = sitk.Cast(roi,
                                      sitk.sitkFloat32) * self.smoothed[i]
@@ -1156,6 +1161,7 @@ class Volume(object):
                 iso.Update()
 
             else:
+                resampler.SetInterpolator(sitk.sitkBSpline)
                 lvlset = resampler.Execute(self.levelsets[i])
                 lvl_roi = sitk.RegionOfInterest(lvlset, c[3:], c[0:3])
                 lvlset = sitk.Cast(roi, sitk.sitkFloat32) * lvl_roi
@@ -1178,20 +1184,6 @@ class Volume(object):
             triangles.SetInputConnection(iso.GetOutputPort())
             triangles.Update()
 
-            '''
-            #fill holes
-            fill = vtk.vtkFillHolesFilter()
-            fill.SetInputConnection(triangles.GetOutputPort())
-            fill.SetHoleSize(1e7)
-            fill.Update()
-
-            #correct bad normals
-            flip = vtk.vtkPolyDataNormals()
-            flip.ConsistencyOn()
-            flip.SplittingOff()
-            flip.SetInputConnection(fill.GetOutputPort())
-            flip.Update()
-            '''
             if self._img.GetDimension() == 3:
                 smooth = vtk.vtkWindowedSincPolyDataFilter()
                 smooth.SetNumberOfIterations(100)
@@ -1382,5 +1374,52 @@ class Volume(object):
         seg.SetDirection(img.GetDirection())
         return seg, max(values), min(values), values
 
-    def active2D(self, img):
-        pass
+    def scale2D(self, img, thresh):
+        stack = []
+        size = img.GetSize()
+        maxt = np.max(thresh)
+        for i, t in enumerate(thresh):
+            s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, i])
+            # maximum difference from max of 300%
+            if (maxt / t) < 3:
+                stack.append(sitk.Cast(s, sitk.sitkFloat32) * (maxt / t))
+            else:
+                stack.append(sitk.Cast(s, sitk.sitkFloat32))
+        nimg = sitk.JoinSeries(stack)
+        nimg.SetOrigin(img.GetOrigin())
+        nimg.SetSpacing(img.GetSpacing())
+        nimg.SetDirection(img.GetDirection())
+        return nimg
+
+    def geodesic2D(self, seed, simg,
+                   cannyLower, cannyUpper, canny_variance,
+                   upsampling, active_iterations, rms,
+                   propagation, curvature, advection):
+            gd = sitk.GeodesicActiveContourLevelSetImageFilter()
+            gd.SetMaximumRMSError(rms / float(upsampling))
+            gd.SetNumberOfIterations(active_iterations)
+            gd.SetPropagationScaling(propagation)
+            gd.SetCurvatureScaling(curvature)
+            gd.SetAdvectionScaling(advection)
+            stack = []
+            size = simg.GetSize()
+            for sl in xrange(size[2]):
+                im = sitk.Extract(simg, [size[0], size[1], 0], [0, 0, sl])
+                s = sitk.Extract(seed, [size[0], size[1], 0], [0, 0, sl])
+                canny = sitk.CannyEdgeDetection(
+                    sitk.Cast(im, sitk.sitkFloat32),
+                    lowerThreshold=cannyLower,
+                    upperThreshold=cannyUpper,
+                    variance=canny_variance)
+                canny = sitk.InvertIntensity(canny, 1)
+                canny = sitk.Cast(canny, sitk.sitkFloat32)
+                d = sitk.SignedMaurerDistanceMap(s,
+                                                 insideIsPositive=False,
+                                                 squaredDistance=False,
+                                                 useImageSpacing=True)
+                stack.append(gd.Execute(d, canny))
+            seg = sitk.JoinSeries(stack)
+            seg.SetSpacing(simg.GetSpacing())
+            seg.SetOrigin(simg.GetOrigin())
+            seg.SetDirection(simg.GetDirection())
+            return seg
