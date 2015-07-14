@@ -87,8 +87,6 @@ class CellMech(object):
         self.ecm_strain = None
         self.rvols = []
         self.dvols = []
-        self.rbbox = []
-        self.dbbox = []
         self.raxes = []
         self.daxes = []
         self.vstrains = []
@@ -102,7 +100,6 @@ class CellMech(object):
         self._snodes = []
         self._bcs = []
 
-        self.getDimensions()
         self._readstls()
         if not(self.rsurfs):
             raise Exception(("No 3D surfaces detected. Currently 2D analysis "
@@ -139,7 +136,8 @@ class CellMech(object):
                 triangles.Update()
                 self.rsurfs.append(triangles.GetOutput())
                 self._make3Dmesh(
-                    str(os.path.normpath(self._ref_dir + os.sep + fname)))
+                    str(os.path.normpath(self._ref_dir + os.sep + fname)),
+                    'MATERIAL')
 
         for fname in sorted(os.listdir(self._def_dir)):
             if '.stl' in fname.lower():
@@ -151,6 +149,9 @@ class CellMech(object):
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
                 self.dsurfs.append(triangles.GetOutput())
+                self._make3Dmesh(
+                    str(os.path.normpath(self._def_dir + os.sep + fname)),
+                    'SPATIAL')
 
     def _deform(self):
         for i in xrange(len(self.rcentroids)):
@@ -198,11 +199,10 @@ class CellMech(object):
             self.cell_strains.append(E)
 
     def deformableRegistration(self):
-        for r, region in enumerate(self.rbbox):
+        for r, mesh in enumerate(self.rmeshes):
             print("Performing deformable image registration for object {:d}"
                   .format(r + 1))
-            rimg, dimg = self._poly2img(self.deformableSettings['Precision'],
-                                        r)
+            rimg, dimg = self._poly2img(r)
             dimg.SetOrigin(rimg.GetOrigin())
 
             rimg = sitk.AntiAliasBinary(rimg)
@@ -266,14 +266,12 @@ class CellMech(object):
             if self.rigidInitial:
                 #transform 3D Mesh
                 tf = vtk.vtkTransformFilter()
-                tf.SetInputData(self.rmeshes[r])
+                tf.SetInputData(mesh)
                 tf.SetTransform(self.rigidTransforms[r])
                 tf.Update()
-                rmesh = tf.GetOutput()
-            else:
-                rmesh = self.rmeshes[r]
+                mesh = tf.GetOutput()
             probe = vtk.vtkProbeFilter()
-            probe.SetInputData(rmesh)
+            probe.SetInputData(mesh)
             probe.SetSourceData(disp)
             probe.Update()
             field = probe.GetOutput()
@@ -363,35 +361,7 @@ class CellMech(object):
                       [E[4, 0], E[5, 0], E[2, 0]]], float)
         self.ecm_strain = E
 
-    def getDimensions(self):
-        labelstats = self._getLabelShape(self.rlabels)
-        self.rvols = labelstats['volume']
-        self.rcentroids = labelstats['centroid']
-        self.raxes = labelstats['ellipsoid diameters']
-        self.rbbox = labelstats['bounding box']
-        labelstats = self._getLabelShape(self.dlabels)
-        self.dvols = labelstats['volume']
-        self.dcentroids = labelstats['centroid']
-        self.daxes = labelstats['ellipsoid diameters']
-        self.dbbox = labelstats['bounding box']
-
-    def _getLabelShape(self, img):
-        ls = sitk.LabelShapeStatisticsImageFilter()
-        ls.Execute(img)
-        labels = ls.GetLabels()
-        labelshape = {'volume': [],
-                      'centroid': [],
-                      'ellipsoid diameters': [],
-                      'bounding box': []}
-        for l in labels:
-            labelshape['volume'].append(ls.GetPhysicalSize(l))
-            labelshape['centroid'].append(ls.GetCentroid(l))
-            labelshape['ellipsoid diameters'].append(
-                ls.GetEquivalentEllipsoidDiameter(l))
-            labelshape['bounding box'].append(ls.GetBoundingBox(l))
-        return labelshape
-
-    def _make3Dmesh(self, filename):
+    def _make3Dmesh(self, filename, frame):
         s = MeshInfo()
         s.load_stl(filename)
         #use TETGEN to generate mesh
@@ -415,23 +385,69 @@ class CellMech(object):
         tetraPoints.SetNumberOfPoints(len(nodes))
         for i, p in enumerate(nodes):
             tetraPoints.InsertPoint(i, p[0], p[1], p[2])
+        vtkMesh = vtk.vtkUnstructuredGrid()
+        vtkMesh.Allocate(len(elements), len(elements))
+        vtkMesh.SetPoints(tetraPoints)
         tetraElements = []
         for i, e in enumerate(elements):
             tetraElements.append(vtk.vtkTetra())
             for j in xrange(4):
                 tetraElements[i].GetPointIds().SetId(j, e[j] - 1)
-        vtkMesh = vtk.vtkUnstructuredGrid()
-        vtkMesh.Allocate(i + 1, i + 1)
+        tetraVols = np.zeros(len(elements), np.float32)
+        tetraCents = np.zeros((len(elements), 3), np.float32)
         for i, e in enumerate(tetraElements):
+            p = vtk.vtkPoints()
+            tetraPoints.GetPoints(e.GetPointIds(), p)
             vtkMesh.InsertNextCell(e.GetCellType(), e.GetPointIds())
-        vtkMesh.SetPoints(tetraPoints)
-        self.rmeshes.append(vtkMesh)
-        self._snodes.append(s_nodes)
-        self._elements.append(elements)
-        self._nodes.append(nodes)
+            tetraVols[i] = e.ComputeVolume(p.GetPoint(0),
+                                           p.GetPoint(1),
+                                           p.GetPoint(2),
+                                           p.GetPoint(3))
+            center = np.zeros(3, np.float32)
+            e.TetraCenter(p.GetPoint(0),
+                          p.GetPoint(1),
+                          p.GetPoint(2),
+                          p.GetPoint(3),
+                          center)
+            tetraCents[i, :] = center
+        totalVol = np.sum(tetraVols)
+        centroid = np.sum(tetraVols[:, None] / totalVol * tetraCents, axis=0)
+        tetraCents -= centroid
 
-    def _poly2img(self, res, ind):
-        dim = int(np.ceil(1.0 / res)) + 6
+        I = np.r_[tetraCents[:, 1] ** 2 + tetraCents[:, 2] ** 2,
+                  -tetraCents[:, 0] * tetraCents[:, 1],
+                  -tetraCents[:, 0] * tetraCents[:, 2],
+                  tetraCents[:, 0] ** 2 + tetraCents[:, 2] ** 2,
+                  -tetraCents[:, 1] * tetraCents[:, 2],
+                  tetraCents[:, 0] ** 2 + tetraCents[:, 1] ** 2]
+        I = np.reshape(I, (tetraVols.size, 6), order='F')
+        I *= tetraVols[:, None]
+        I = np.sum(I, axis=0)
+        I = np.array([[I[0], I[1], I[2]],
+                      [I[1], I[3], I[4]],
+                      [I[2], I[4], I[5]]])
+        w, v = np.linalg.eigh(I)
+        order = np.argsort(w)
+        w = w[order]
+        v = v[order]
+        r_major = np.sqrt(5 * (w[1] + w[2] - w[0]) / (2 * totalVol))
+        r_middle = np.sqrt(5 * (w[0] - w[1] + w[2]) / (2 * totalVol))
+        r_minor = np.sqrt(5 * (w[0] + w[1] - w[2]) / (2 * totalVol))
+        if frame == 'MATERIAL':
+            self.rmeshes.append(vtkMesh)
+            self._snodes.append(s_nodes)
+            self._elements.append(elements)
+            self._nodes.append(nodes)
+            self.raxes.append([r_major, r_middle, r_minor])
+            self.rcentroids.append(centroid)
+            self.rvols.append(totalVol)
+        else:
+            self.daxes.append([r_major, r_middle, r_minor])
+            self.dcentroids.append(centroid)
+            self.dvols.append(totalVol)
+
+    def _poly2img(self, ind):
+        dim = int(np.ceil(1.0 / self.deformableSettings['Precision'])) + 6
         rpoly = vtk.vtkPolyData()
         rpoly.DeepCopy(self.rsurfs[ind])
         dpoly = self.dsurfs[ind]
@@ -452,7 +468,8 @@ class CellMech(object):
         for i in xrange(3):
             rspan = rbounds[2 * i + 1] - rbounds[2 * i]
             dspan = dbounds[2 * i + 1] - dbounds[2 * i]
-            spacing[i] = np.max([rspan, dspan]) * res
+            spacing[i] = (np.max([rspan, dspan])
+                          * self.deformableSettings['Precision'])
 
         imgs = []
         for i in xrange(2):

@@ -70,7 +70,8 @@ class Application(Frame):
                          'edgeCurvature': DoubleVar(value=10.0),
                          'deformableIterations': IntVar(value=200),
                          'deformableRMS': DoubleVar(value=0.01),
-                         'deformableSigma': DoubleVar(value=3.0)}
+                         'deformableSigma': DoubleVar(value=3.0),
+                         'deformablePrecision': DoubleVar(value=0.02)}
 
         self.intSettings = {'stain': IntVar(value=0),
                             'display': IntVar(value=1),
@@ -468,14 +469,6 @@ class Application(Frame):
             self.tab4, text="Deformable Image Registration Settings")
         self.deformableSettingsFrame.grid(row=3, column=1,
                                           padx=5, pady=5, sticky=E + W)
-        settings = [
-            ('Displacement Field Smoothing Variance', 'deformableSigma'),
-            ('Maximum RMS error', 'deformableRMS'),
-            ('Maximum Iterations', 'deformableIterations')]
-        for t, v in settings:
-            Label(self.deformableSettingsFrame, text=t).pack(anchor=W)
-            Entry(self.deformableSettingsFrame,
-                  textvariable=self.settings[v]).pack(anchor=W)
 
         #button to execute segmentation(s)
         self.buttonExecuteKinematics = Button(self.tab4, bg='green',
@@ -999,7 +992,8 @@ class Application(Frame):
             settings = [
                 ('Displacement Field Smoothing Variance', 'deformableSigma'),
                 ('Maximum RMS error', 'deformableRMS'),
-                ('Maximum Iterations', 'deformableIterations')]
+                ('Maximum Iterations', 'deformableIterations'),
+                ('Precision', 'deformablePrecision')]
             for t, v in settings:
                 Label(self.deformableSettingsFrame, text=t).pack(anchor=W)
                 Entry(self.deformableSettingsFrame,
@@ -1245,7 +1239,9 @@ class Application(Frame):
                                 'Maximum RMS': self.settings[
                                     'deformableRMS'].get(),
                                 'Displacement Smoothing': self.settings[
-                                    'deformableSigma'].get()})
+                                    'deformableSigma'].get(),
+                                'Precision': self.settings[
+                                    'deformablePrecision'].get()})
             ofid.write(d + '\n')
             ofid.write(("Object ID, E11, E22, E33, E12, E13, E23, "
                         "Volumetric, Effective, Maximum Tensile, "
