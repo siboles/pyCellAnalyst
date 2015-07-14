@@ -3,7 +3,8 @@ import os
 import pickle
 import SimpleITK as sitk
 import numpy as np
-from vtk.util import numpy_support as vti
+from vtk.util import vtkImageImportFromArray as vti
+from vtk.util.numpy_support import vtk_to_numpy
 from meshpy.tet import (MeshInfo, build, Options)
 
 
@@ -55,7 +56,8 @@ class CellMech(object):
                  saveFEA=False,
                  deformableSettings={'Iterations': 200,
                                      'Maximum RMS': 0.01,
-                                     'Displacement Smoothing': 3.0}):
+                                     'Displacement Smoothing': 3.0,
+                                     'Precision': 0.01}):
         if ref_dir is None:
             raise SystemExit(("You must indicate a directory containing "
                               "reference state STLs. Terminating..."))
@@ -65,6 +67,10 @@ class CellMech(object):
         self._ref_dir = ref_dir
         self._def_dir = def_dir
         self.rigidInitial = rigidInitial
+        self.rimg = sitk.ReadImage(
+            str(os.path.normpath(self._ref_dir + os.sep + "stack.nii")))
+        self.dimg = sitk.ReadImage(
+            str(os.path.normpath(self._def_dir + os.sep + "stack.nii")))
         self.rlabels = sitk.ReadImage(
             str(os.path.normpath(self._ref_dir + os.sep + "labels.nii")))
         self.dlabels = sitk.ReadImage(
@@ -88,6 +94,8 @@ class CellMech(object):
         self.vstrains = []
         self.effstrains = []
         self.cell_fields = []
+
+        self.rigidTransforms = []
 
         self._elements = []
         self._nodes = []
@@ -130,9 +138,8 @@ class CellMech(object):
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
                 self.rsurfs.append(triangles.GetOutput())
-                if self.deformable and self.dim == 3:
-                    self._make3Dmesh(
-                        str(os.path.normpath(self._ref_dir + os.sep + fname)))
+                self._make3Dmesh(
+                    str(os.path.normpath(self._ref_dir + os.sep + fname)))
 
         for fname in sorted(os.listdir(self._def_dir)):
             if '.stl' in fname.lower():
@@ -167,6 +174,7 @@ class CellMech(object):
                 trans = vtk.vtkTransform()
                 trans.SetMatrix(ICP.GetMatrix())
                 trans.Update()
+                self.rigidTransforms.append(trans)
                 rot = vtk.vtkTransformPolyDataFilter()
                 rot.SetInputData(rcopy)
                 rot.SetTransform(trans)
@@ -193,29 +201,16 @@ class CellMech(object):
         for r, region in enumerate(self.rbbox):
             print("Performing deformable image registration for object {:d}"
                   .format(r + 1))
-            newsize = np.max(np.vstack((region[3:], self.dbbox[r][3:])),
-                             axis=0)
-            bufferzone = np.array(map(int, 0.2 * newsize))
-            newsize = newsize + 2 * bufferzone
-            rorigin = np.array(region[0:3]) - bufferzone
-            dorigin = np.array(self.dbbox[r][0:3]) - bufferzone
-            rroi = sitk.RegionOfInterest(self.rlabels == (r + 1),
-                                         newsize, rorigin)
-            droi = sitk.RegionOfInterest(self.dlabels == (r + 1),
-                                         newsize, dorigin)
-            droi.SetOrigin(rroi.GetOrigin())
-            #set up initial displacement field as translation of deformed
-            #cell r to reference cell r bounding box origin
-            translation = (rorigin - dorigin) * np.array(rroi.GetSpacing())
-            t = translation - (np.array(self.rcentroids[r]) -
-                               np.array(self.dcentroids[r]))
-            a_trans = sitk.Transform(3, sitk.sitkAffine)
-            a_trans.SetParameters([1, 0, 0, 0, 1, 0, 0, 0, 1,
-                                   t[0], t[1], t[2]])
-            droi = sitk.Resample(droi, droi, a_trans, sitk.sitkNearestNeighbor)
-            rroi = sitk.AntiAliasBinary(rroi)
-            droi = sitk.AntiAliasBinary(droi)
-            sitk.WriteImage(droi + rroi, 'roi_overlay.nii')
+            rimg, dimg = self._poly2img(self.deformableSettings['Precision'],
+                                        r)
+            dimg.SetOrigin(rimg.GetOrigin())
+
+            rimg = sitk.AntiAliasBinary(rimg)
+            dimg = sitk.AntiAliasBinary(dimg)
+
+            sitk.WriteImage(rimg, "reference{:d}.nii".format(r))
+            sitk.WriteImage(dimg, "deformed{:d}.nii".format(r))
+
             #peform the deformable registration
             register = sitk.FastSymmetricForcesDemonsRegistrationFilter()
             register.SetNumberOfIterations(
@@ -228,7 +223,7 @@ class CellMech(object):
             register.UseImageSpacingOn()
             register.SetMaximumUpdateStepLength(2.0)
             register.SetUseGradientType(0)
-            disp_field = register.Execute(droi, rroi)
+            disp_field = register.Execute(rimg, dimg)
             print("...Elapsed iterations: {:d}"
                   .format(register.GetElapsedIterations()))
             print("...Change in RMS error: {:6.3f}"
@@ -237,9 +232,9 @@ class CellMech(object):
             #translate displacement field to VTK regular grid
             a = sitk.GetArrayFromImage(disp_field)
             disp = vtk.vtkImageData()
-            disp.SetOrigin(rroi.GetOrigin())
-            disp.SetSpacing(rroi.GetSpacing())
-            disp.SetDimensions(rroi.GetSize())
+            disp.SetOrigin(rimg.GetOrigin())
+            disp.SetSpacing(rimg.GetSpacing())
+            disp.SetDimensions(rimg.GetSize())
             arr = vtk.vtkDoubleArray()
             arr.SetNumberOfComponents(3)
             arr.SetNumberOfTuples(disp.GetNumberOfPoints())
@@ -250,7 +245,7 @@ class CellMech(object):
             for i in xrange(disp.GetNumberOfPoints()):
                 arr.SetTuple3(i, data1[i], data2[i], data3[i])
             disp.GetPointData().SetVectors(arr)
-            '''
+
             #calculate the strain from displacement field
             getStrain = vtk.vtkCellDerivatives()
             getStrain.SetInputData(disp)
@@ -263,14 +258,22 @@ class CellMech(object):
             c2p.SetInputData(strains)
             c2p.Update()
             disp = c2p.GetOutput()
-            '''
+
             #use VTK probe filter to interpolate displacements and strains
             #to 3D meshes of cells and save as UnstructuredGrid (.vtu)
             # to visualize in ParaView; this is a linear interpolation
             print("...Interpolating displacements to 3D mesh.")
-            c = self.rmeshes[r]
+            if self.rigidInitial:
+                #transform 3D Mesh
+                tf = vtk.vtkTransformFilter()
+                tf.SetInputData(self.rmeshes[r])
+                tf.SetTransform(self.rigidTransforms[r])
+                tf.Update()
+                rmesh = tf.GetOutput()
+            else:
+                rmesh = self.rmeshes[r]
             probe = vtk.vtkProbeFilter()
-            probe.SetInputData(c)
+            probe.SetInputData(rmesh)
             probe.SetSourceData(disp)
             probe.Update()
             field = probe.GetOutput()
@@ -426,3 +429,70 @@ class CellMech(object):
         self._snodes.append(s_nodes)
         self._elements.append(elements)
         self._nodes.append(nodes)
+
+    def _poly2img(self, res, ind):
+        dim = int(np.ceil(1.0 / res)) + 6
+        rpoly = vtk.vtkPolyData()
+        rpoly.DeepCopy(self.rsurfs[ind])
+        dpoly = self.dsurfs[ind]
+        if self.rigidInitial:
+            rot = vtk.vtkTransformPolyDataFilter()
+            rot.SetInputData(rpoly)
+            rot.SetTransform(self.rigidTransforms[ind])
+            rot.Update()
+            rpoly = rot.GetOutput()
+
+        rbounds = np.zeros(6, np.float32)
+        dbounds = np.copy(rbounds)
+
+        rpoly.GetBounds(rbounds)
+        dpoly.GetBounds(dbounds)
+
+        spacing = np.zeros(3, np.float32)
+        for i in xrange(3):
+            rspan = rbounds[2 * i + 1] - rbounds[2 * i]
+            dspan = dbounds[2 * i + 1] - dbounds[2 * i]
+            spacing[i] = np.max([rspan, dspan]) * res
+
+        imgs = []
+        for i in xrange(2):
+            arr = np.ones((dim, dim, dim), np.uint8) * 255
+            arr2img = vti.vtkImageImportFromArray()
+            arr2img.SetDataSpacing(spacing)
+            arr2img.SetDataExtent((0, dim - 1, 0, dim - 1, 0, dim - 1))
+            arr2img.SetArray(arr)
+            arr2img.Update()
+            if i == 0:
+                rimg = arr2img.GetOutput()
+                rimg.SetOrigin((rbounds[0] - spacing[0] * 3,
+                                rbounds[2] - spacing[1] * 3,
+                                rbounds[4] - spacing[2] * 3))
+            else:
+                dimg = arr2img.GetOutput()
+                dimg.SetOrigin((dbounds[0] - spacing[0] * 3,
+                                dbounds[2] - spacing[1] * 3,
+                                dbounds[4] - spacing[2] * 3))
+        imgs = []
+        for (pd, img) in [(rpoly, rimg), (dpoly, dimg)]:
+            pol2stenc = vtk.vtkPolyDataToImageStencil()
+            pol2stenc.SetInputData(pd)
+            pol2stenc.SetOutputOrigin(img.GetOrigin())
+            pol2stenc.SetOutputSpacing(img.GetSpacing())
+            pol2stenc.SetOutputWholeExtent(img.GetExtent())
+            pol2stenc.Update()
+
+            imgstenc = vtk.vtkImageStencil()
+            imgstenc.SetInputData(img)
+            imgstenc.SetStencilConnection(pol2stenc.GetOutputPort())
+            imgstenc.ReverseStencilOff()
+            imgstenc.SetBackgroundValue(0)
+            imgstenc.Update()
+
+            arr = vtk_to_numpy(imgstenc.GetOutput().GetPointData().GetArray(0))
+            arr = arr.reshape(dim, dim, dim)
+            itk_img = sitk.GetImageFromArray(arr)
+            itk_img.SetSpacing(img.GetSpacing())
+            itk_img.SetOrigin(img.GetOrigin())
+            imgs.append(itk_img)
+
+        return (imgs[0], imgs[1])
