@@ -89,7 +89,8 @@ class Application(Frame):
                             'rigidInitial': IntVar(value=1),
                             'defReg': IntVar(value=0),
                             'saveFEA': IntVar(value=0),
-                            'makePlots': IntVar(value=1)}
+                            'makePlots': IntVar(value=1),
+                            'deformableDisplay': IntVar(value=1)}
 
         self.smoothingMethods = ['None',
                                  'Median',
@@ -430,40 +431,30 @@ class Application(Frame):
             self.tab4, text="Kinematics Analysis Options")
         self.kinematicsOptionsFrame.grid(row=3, column=0,
                                          padx=5, pady=5, sticky=E + W)
-        settings = [('Align with a rigid rotation initially', 'initialRigid'),
+        settings = [('Align with a rigid rotation initially', 'rigidInitial'),
                     ('Perform Deformable Image Registration', 'defReg'),
-                    ('Save for Finite Element Analysis', 'saveFEA')]
+                    ('Save for Finite Element Analysis', 'saveFEA'),
+                    ('Display Registration Results', 'deformableDisplay')]
 
-        Checkbutton(self.kinematicsOptionsFrame,
-                    text='Align with a rigid rotation initially',
-                    variable=self.intSettings['rigidInitial']).grid(row=3,
-                                                                    column=0,
-                                                                    padx=5,
-                                                                    pady=5,
-                                                                    sticky=NW)
-        Checkbutton(self.kinematicsOptionsFrame,
-                    text='Perform Deformable Image Registration',
-                    variable=self.intSettings['defReg'],
-                    command=self.populateDeformableSettings).grid(row=4,
+        for i, (t, v) in enumerate(settings):
+            if i == 1:
+                Checkbutton(
+                    self.kinematicsOptionsFrame,
+                    text=t,
+                    variable=self.intSettings[v],
+                    command=self.populateDeformableSettings).grid(row=3 + i,
                                                                   column=0,
                                                                   padx=5,
                                                                   pady=5,
                                                                   sticky=NW)
-        Checkbutton(self.kinematicsOptionsFrame,
-                    text='Save for Finite Element Analysis',
-                    variable=self.intSettings['saveFEA']).grid(row=5,
+            else:
+                Checkbutton(self.kinematicsOptionsFrame,
+                            text=t,
+                            variable=self.intSettings[v]).grid(row=3 + i,
                                                                column=0,
                                                                padx=5,
                                                                pady=5,
                                                                sticky=NW)
-
-        Checkbutton(self.kinematicsOptionsFrame,
-                    text='Generate Plots',
-                    variable=self.intSettings['makePlots']).grid(row=6,
-                                                                 column=0,
-                                                                 padx=5,
-                                                                 pady=5,
-                                                                 sticky=NW)
 
         self.deformableSettingsFrame = LabelFrame(
             self.tab4, text="Deformable Image Registration Settings")
@@ -475,7 +466,7 @@ class Application(Frame):
                                               font=('Helvetica', '20', 'bold'))
         self.buttonExecuteKinematics["text"] = "Execute Analysis"
         self.buttonExecuteKinematics["command"] = self.run_kinematics
-        self.buttonExecuteKinematics.grid(row=5, column=0, columnspan=2,
+        self.buttonExecuteKinematics.grid(row=7, column=0, columnspan=2,
                                           padx=5, pady=5, sticky=W + E)
         ##### End Kinematics Tab #####
 
@@ -1228,20 +1219,23 @@ class Application(Frame):
                 shortname = shortname.replace('_results', '')
             except:
                 pass
-            mech = CellMech(ref_dir=self.materialDirectory, def_dir=d,
-                            rigidInitial=self.intSettings['rigidInitial']
-                            .get(),
-                            deformable=self.intSettings['defReg'].get(),
-                            saveFEA=self.intSettings['saveFEA'].get(),
-                            deformableSettings={
-                                'Iterations': self.settings[
-                                    'deformableIterations'].get(),
-                                'Maximum RMS': self.settings[
-                                    'deformableRMS'].get(),
-                                'Displacement Smoothing': self.settings[
-                                    'deformableSigma'].get(),
-                                'Precision': self.settings[
-                                    'deformablePrecision'].get()})
+            mech = CellMech(
+                ref_dir=self.materialDirectory, def_dir=d,
+                rigidInitial=self.intSettings['rigidInitial']
+                .get(),
+                deformable=self.intSettings['defReg'].get(),
+                saveFEA=self.intSettings['saveFEA'].get(),
+                deformableSettings={
+                    'Iterations': self.settings[
+                        'deformableIterations'].get(),
+                    'Maximum RMS': self.settings[
+                        'deformableRMS'].get(),
+                    'Displacement Smoothing': self.settings[
+                        'deformableSigma'].get(),
+                    'Precision': self.settings[
+                        'deformablePrecision'].get()},
+                display=self.intSettings['deformableDisplay'].get())
+
             ofid.write(d + '\n')
             ofid.write(("Object ID, E11, E22, E33, E12, E13, E23, "
                         "Volumetric, Effective, Maximum Tensile, "

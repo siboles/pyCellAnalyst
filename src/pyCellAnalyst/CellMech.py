@@ -1,10 +1,11 @@
 import vtk
 import os
 import pickle
+import time
 import SimpleITK as sitk
 import numpy as np
 from vtk.util import vtkImageImportFromArray as vti
-from vtk.util.numpy_support import vtk_to_numpy
+from vtk.util.numpy_support import (vtk_to_numpy, numpy_to_vtk) 
 from meshpy.tet import (MeshInfo, build, Options)
 
 
@@ -57,7 +58,8 @@ class CellMech(object):
                  deformableSettings={'Iterations': 200,
                                      'Maximum RMS': 0.01,
                                      'Displacement Smoothing': 3.0,
-                                     'Precision': 0.01}):
+                                     'Precision': 0.01},
+                 display=False):
         if ref_dir is None:
             raise SystemExit(("You must indicate a directory containing "
                               "reference state STLs. Terminating..."))
@@ -67,14 +69,7 @@ class CellMech(object):
         self._ref_dir = ref_dir
         self._def_dir = def_dir
         self.rigidInitial = rigidInitial
-        self.rimg = sitk.ReadImage(
-            str(os.path.normpath(self._ref_dir + os.sep + "stack.nii")))
-        self.dimg = sitk.ReadImage(
-            str(os.path.normpath(self._def_dir + os.sep + "stack.nii")))
-        self.rlabels = sitk.ReadImage(
-            str(os.path.normpath(self._ref_dir + os.sep + "labels.nii")))
-        self.dlabels = sitk.ReadImage(
-            str(os.path.normpath(self._def_dir + os.sep + "labels.nii")))
+        self.display = display
         self.deformable = deformable
         self.saveFEA = saveFEA
         self.deformableSettings = deformableSettings
@@ -202,14 +197,14 @@ class CellMech(object):
         for r, mesh in enumerate(self.rmeshes):
             print("Performing deformable image registration for object {:d}"
                   .format(r + 1))
-            rimg, dimg = self._poly2img(r)
-            dimg.SetOrigin(rimg.GetOrigin())
+            rimg, dimg, rpoly = self._poly2img(r)
+            origin = rimg.GetOrigin()
+            rimg.SetOrigin((0, 0, 0))
+            dimg.SetOrigin((0, 0, 0))
 
+            steplength = np.min(dimg.GetSpacing()) * 5.0
             rimg = sitk.AntiAliasBinary(rimg)
             dimg = sitk.AntiAliasBinary(dimg)
-
-            sitk.WriteImage(rimg, "reference{:d}.nii".format(r))
-            sitk.WriteImage(dimg, "deformed{:d}.nii".format(r))
 
             #peform the deformable registration
             register = sitk.FastSymmetricForcesDemonsRegistrationFilter()
@@ -221,7 +216,7 @@ class CellMech(object):
                 self.deformableSettings['Displacement Smoothing'])
             register.SmoothUpdateFieldOff()
             register.UseImageSpacingOn()
-            register.SetMaximumUpdateStepLength(2.0)
+            register.SetMaximumUpdateStepLength(steplength)
             register.SetUseGradientType(0)
             disp_field = register.Execute(rimg, dimg)
             print("...Elapsed iterations: {:d}"
@@ -229,21 +224,17 @@ class CellMech(object):
             print("...Change in RMS error: {:6.3f}"
                   .format(register.GetRMSChange()))
 
+            disp_field.SetOrigin(origin)
+
             #translate displacement field to VTK regular grid
             a = sitk.GetArrayFromImage(disp_field)
             disp = vtk.vtkImageData()
-            disp.SetOrigin(rimg.GetOrigin())
-            disp.SetSpacing(rimg.GetSpacing())
-            disp.SetDimensions(rimg.GetSize())
-            arr = vtk.vtkDoubleArray()
+            disp.SetOrigin(disp_field.GetOrigin())
+            disp.SetSpacing(disp_field.GetSpacing())
+            disp.SetDimensions(disp_field.GetSize())
+            arr = numpy_to_vtk(a.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
             arr.SetNumberOfComponents(3)
-            arr.SetNumberOfTuples(disp.GetNumberOfPoints())
-            #flatten array for translation to VTK
-            data1 = np.ravel(a[:, :, :, 0])
-            data2 = np.ravel(a[:, :, :, 1])
-            data3 = np.ravel(a[:, :, :, 2])
-            for i in xrange(disp.GetNumberOfPoints()):
-                arr.SetTuple3(i, data1[i], data2[i], data3[i])
+            arr.SetName("Displacement")
             disp.GetPointData().SetVectors(arr)
 
             #calculate the strain from displacement field
@@ -275,6 +266,11 @@ class CellMech(object):
             probe.SetSourceData(disp)
             probe.Update()
             field = probe.GetOutput()
+            if self.display:
+                probe2 = vtk.vtkProbeFilter()
+                probe2.SetInputData(rpoly)
+                probe2.SetSourceData(disp)
+                probe2.Update()
 
             self.cell_fields.append(field)
             if self.saveFEA:
@@ -288,10 +284,12 @@ class CellMech(object):
                 self._bcs.append(bcs)
             idWriter = vtk.vtkXMLUnstructuredGridWriter()
             idWriter.SetFileName(
-                str(os.path.normpath(self._def_dir + '/cell{:02d}.vtu'
-                                     .format(r + 1))))
+                str(os.path.normpath(self._def_dir + os.sep +
+                                     'cell{:02d}.vtu'.format(r + 1))))
             idWriter.SetInputData(self.cell_fields[r])
             idWriter.Write()
+            if self.display:
+                self.animate(probe2.GetOutput(), r)
         print("Registration completed.")
 
     def _getECMstrain(self):
@@ -302,7 +300,7 @@ class CellMech(object):
             print(("WARNING: There are less than 4 objects in the space; "
                    "therefore, tissue strain was not calculated."))
             return
-        da = vti.numpy_to_vtk(rc)
+        da = numpy_to_vtk(rc)
         p = vtk.vtkPoints()
         p.SetData(da)
         pd = vtk.vtkPolyData()
@@ -315,7 +313,7 @@ class CellMech(object):
         quality.SetInputData(tet.GetOutput())
         quality.Update()
         mq = quality.GetOutput().GetCellData().GetArray("Quality")
-        mq = vti.vtk_to_numpy(mq)
+        mq = vtk_to_numpy(mq)
         try:
             #tet with edge ratio closest to 1
             btet = np.argmin(abs(mq - 1.0))
@@ -381,35 +379,40 @@ class CellMech(object):
         nodes = list(mesh.points)
         faces = np.array(mesh.faces)
         s_nodes = list(np.unique(np.ravel(faces)))
+
+        ntmp = np.array(nodes, np.float64)
+        arr = numpy_to_vtk(ntmp.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
+        arr.SetNumberOfComponents(3)
         tetraPoints = vtk.vtkPoints()
-        tetraPoints.SetNumberOfPoints(len(nodes))
-        for i, p in enumerate(nodes):
-            tetraPoints.InsertPoint(i, p[0], p[1], p[2])
+        tetraPoints.SetData(arr)
+
         vtkMesh = vtk.vtkUnstructuredGrid()
         vtkMesh.Allocate(len(elements), len(elements))
         vtkMesh.SetPoints(tetraPoints)
-        tetraElements = []
-        for i, e in enumerate(elements):
-            tetraElements.append(vtk.vtkTetra())
-            for j in xrange(4):
-                tetraElements[i].GetPointIds().SetId(j, e[j] - 1)
-        tetraVols = np.zeros(len(elements), np.float32)
-        tetraCents = np.zeros((len(elements), 3), np.float32)
-        for i, e in enumerate(tetraElements):
-            p = vtk.vtkPoints()
-            tetraPoints.GetPoints(e.GetPointIds(), p)
-            vtkMesh.InsertNextCell(e.GetCellType(), e.GetPointIds())
-            tetraVols[i] = e.ComputeVolume(p.GetPoint(0),
-                                           p.GetPoint(1),
-                                           p.GetPoint(2),
-                                           p.GetPoint(3))
-            center = np.zeros(3, np.float32)
-            e.TetraCenter(p.GetPoint(0),
-                          p.GetPoint(1),
-                          p.GetPoint(2),
-                          p.GetPoint(3),
-                          center)
-            tetraCents[i, :] = center
+
+        e = np.array(elements, np.uint32) - 1
+        e = np.hstack((np.ones((e.shape[0], 1), np.uint32) * 4, e))
+
+        arr = numpy_to_vtk(e.ravel(), deep=True,
+                           array_type=vtk.VTK_ID_TYPE)
+
+        tet = vtk.vtkCellArray()
+        tet.SetCells(e.size / 5, arr)
+
+        vtkMesh.SetCells(10, tet)
+
+        n1 = ntmp[e[:, 1], :]
+        n2 = ntmp[e[:, 2], :]
+        n3 = ntmp[e[:, 3], :]
+        n4 = ntmp[e[:, 4], :]
+        tetraCents = (n1 + n2 + n3 + n4) / 4.0
+        e1 = n4 - n1
+        e2 = n3 - n1
+        e3 = n2 - n1
+        tetraVols = np.einsum('...j,...j',
+                              e1, np.cross(e2, e3, axis=1)) / 6.0
+        tetraVols = np.abs(tetraVols.ravel())
+
         totalVol = np.sum(tetraVols)
         centroid = np.sum(tetraVols[:, None] / totalVol * tetraCents, axis=0)
         tetraCents -= centroid
@@ -447,7 +450,7 @@ class CellMech(object):
             self.dvols.append(totalVol)
 
     def _poly2img(self, ind):
-        dim = int(np.ceil(1.0 / self.deformableSettings['Precision'])) + 6
+        dim = int(np.ceil(1.0 / self.deformableSettings['Precision'])) + 10
         rpoly = vtk.vtkPolyData()
         rpoly.DeepCopy(self.rsurfs[ind])
         dpoly = self.dsurfs[ind]
@@ -472,8 +475,9 @@ class CellMech(object):
                           * self.deformableSettings['Precision'])
 
         imgs = []
+        half = float(dim) / 2.0
         for i in xrange(2):
-            arr = np.ones((dim, dim, dim), np.uint8) * 255
+            arr = np.ones((dim, dim, dim), np.uint8)
             arr2img = vti.vtkImageImportFromArray()
             arr2img.SetDataSpacing(spacing)
             arr2img.SetDataExtent((0, dim - 1, 0, dim - 1, 0, dim - 1))
@@ -481,14 +485,20 @@ class CellMech(object):
             arr2img.Update()
             if i == 0:
                 rimg = arr2img.GetOutput()
-                rimg.SetOrigin((rbounds[0] - spacing[0] * 3,
-                                rbounds[2] - spacing[1] * 3,
-                                rbounds[4] - spacing[2] * 3))
+                rimg.SetOrigin((np.mean(rbounds[0:2]) -
+                                half * spacing[0] + spacing[0] / 2,
+                                np.mean(rbounds[2:4]) -
+                                half * spacing[1] + spacing[1] / 2,
+                                np.mean(rbounds[4:]) -
+                                half * spacing[2] + spacing[2] / 2))
             else:
                 dimg = arr2img.GetOutput()
-                dimg.SetOrigin((dbounds[0] - spacing[0] * 3,
-                                dbounds[2] - spacing[1] * 3,
-                                dbounds[4] - spacing[2] * 3))
+                dimg.SetOrigin((np.mean(dbounds[0:2]) -
+                                half * spacing[0] + spacing[0] / 2,
+                                np.mean(dbounds[2:4]) -
+                                half * spacing[1] + spacing[1] / 2,
+                                np.mean(dbounds[4:]) -
+                                half * spacing[2] + spacing[2] / 2))
         imgs = []
         for (pd, img) in [(rpoly, rimg), (dpoly, dimg)]:
             pol2stenc = vtk.vtkPolyDataToImageStencil()
@@ -496,6 +506,7 @@ class CellMech(object):
             pol2stenc.SetOutputOrigin(img.GetOrigin())
             pol2stenc.SetOutputSpacing(img.GetSpacing())
             pol2stenc.SetOutputWholeExtent(img.GetExtent())
+            pol2stenc.SetTolerance(0.0001)
             pol2stenc.Update()
 
             imgstenc = vtk.vtkImageStencil()
@@ -511,5 +522,187 @@ class CellMech(object):
             itk_img.SetSpacing(img.GetSpacing())
             itk_img.SetOrigin(img.GetOrigin())
             imgs.append(itk_img)
+        return (imgs[0], imgs[1], rpoly)
 
-        return (imgs[0], imgs[1])
+    def animate(self, pd, ind):
+        pd.GetPointData().SetActiveVectors("Displacement")
+
+        class vtkTimerCallback():
+            def __init__(self):
+                self.timer_count = 0
+
+            def execute(self, obj, event):
+                if self.timer_count == 10:
+                    self.timer_count = 0
+                warpVector = vtk.vtkWarpVector()
+                warpVector.SetInputData(pd)
+                warpVector.SetScaleFactor(0.1 * self.timer_count)
+                warpVector.Update()
+                poly = warpVector.GetPolyDataOutput()
+                getScalars = vtk.vtkExtractVectorComponents()
+                getScalars.SetInputData(poly)
+                getScalars.Update()
+
+                vectorNorm = vtk.vtkVectorNorm()
+                vectorNorm.SetInputData(poly)
+                vectorNorm.Update()
+
+                scalars = []
+                scalars.append(
+                    getScalars.GetVzComponent())
+                scalars.append(
+                    vectorNorm.GetOutput())
+                scalars.append(
+                    getScalars.GetVxComponent())
+                scalars.append(
+                    getScalars.GetVyComponent())
+
+                names = ("Z", "Mag", "X", "Y")
+                for k, a in enumerate(self.actors):
+                    calc = vtk.vtkArrayCalculator()
+                    scalars[k].GetPointData().GetScalars().SetName(names[k])
+                    calc.SetInputData(scalars[k])
+                    calc.AddScalarArrayName(names[k])
+                    calc.SetResultArrayName(names[k])
+                    calc.SetFunction("%s * %f" % (names[k], self.timer_count))
+                    calc.Update()
+                    mapper = vtk.vtkPolyDataMapper()
+                    mapper.SetInputData(calc.GetOutput())
+                    mapper.SetScalarRange(calc.GetOutput().GetScalarRange())
+                    mapper.SetScalarModeToUsePointData()
+                    mapper.SetColorModeToMapScalars()
+                    mapper.Update()
+                    a.SetMapper(mapper)
+                    cb.scalar_bars[k].SetLookupTable(mapper.GetLookupTable())
+
+                iren = obj
+                iren.GetRenderWindow().Render()
+                time.sleep(0.3)
+
+                if self.key == "Up":
+                    try:
+                        os.mkdir(self.directory)
+                    except:
+                        pass
+                    w2i = vtk.vtkWindowToImageFilter()
+                    w2i.SetInput(obj.GetRenderWindow())
+                    w2i.Update()
+
+                    png = vtk.vtkPNGWriter()
+                    png.SetInputConnection(w2i.GetOutputPort())
+                    png.SetFileName(self.directory + os.sep +
+                                    "frame{:d}.png".format(self.timer_count))
+                    png.Update()
+                    png.Write()
+
+                self.timer_count += 1
+
+            def Keypress(self, obj, event):
+                self.key = obj.GetKeySym()
+                if self.key == "Right" or self.key == "Up":
+                    for i in xrange(10):
+                        obj.CreateOneShotTimer(1)
+
+        renwin = vtk.vtkRenderWindow()
+
+        iren = vtk.vtkRenderWindowInteractor()
+        iren.SetRenderWindow(renwin)
+        iren.Initialize()
+        cb = vtkTimerCallback()
+
+        xmins = (0, 0.5, 0, 0.5)
+        xmaxs = (0.5, 1, 0.5, 1)
+        ymins = (0, 0, 0.5, 0.5)
+        ymaxs = (0.5, 0.5, 1, 1)
+        titles = ('Z Displacement', 'Magnitude',
+                  'X Displacement', 'Y Displacement')
+        cb.actors = []
+        cb.scalar_bars = []
+        cb.directory = str(os.path.normpath(
+            self._def_dir + os.sep + "animation{:0d}".format(ind + 1)))
+
+        warpVector = vtk.vtkWarpVector()
+        warpVector.SetInputData(pd)
+        warpVector.Update()
+        poly = warpVector.GetPolyDataOutput()
+
+        getScalars = vtk.vtkExtractVectorComponents()
+        getScalars.SetInputData(poly)
+        getScalars.Update()
+
+        vectorNorm = vtk.vtkVectorNorm()
+        vectorNorm.SetInputData(poly)
+        vectorNorm.Update()
+
+        scalars = []
+        scalars.append(
+            getScalars.GetVzComponent())
+        scalars.append(
+            vectorNorm.GetOutput())
+        scalars.append(
+            getScalars.GetVxComponent())
+        scalars.append(
+            getScalars.GetVyComponent())
+        bounds = np.zeros(6, np.float32)
+        pd.GetBounds(bounds)
+        length = np.min(bounds[1::2] - bounds[0:-1:2]) * 0.2
+        bounds[1] = bounds[0] + length
+        bounds[3] = bounds[2] + length
+        bounds[5] = bounds[4] + length
+        for j in xrange(4):
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputData(scalars[j])
+            mapper.SetScalarRange(scalars[j].GetScalarRange())
+            mapper.SetScalarModeToUsePointData()
+            mapper.SetColorModeToMapScalars()
+
+            scalar_bar = vtk.vtkScalarBarActor()
+            scalar_bar.SetLookupTable(mapper.GetLookupTable())
+            scalar_bar.SetTitle(titles[j])
+            scalar_bar.SetLabelFormat("%3.3f")
+            cb.scalar_bars.append(scalar_bar)
+
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            cb.actors.append(actor)
+
+            renderer = vtk.vtkRenderer()
+            renderer.SetBackground(0., 0., 0.)
+            renwin.AddRenderer(renderer)
+            if j == 0:
+                camera = renderer.GetActiveCamera()
+            else:
+                renderer.SetActiveCamera(camera)
+
+            triad = vtk.vtkCubeAxesActor()
+            triad.SetCamera(camera)
+            triad.SetFlyModeToStaticTriad()
+            triad.SetBounds(bounds)
+            triad.GetXAxesLinesProperty().SetColor(1.0, 0.0, 0.0)
+            triad.GetYAxesLinesProperty().SetColor(0.0, 1.0, 0.0)
+            triad.GetZAxesLinesProperty().SetColor(0.0, 0.0, 1.0)
+            triad.GetXAxesLinesProperty().SetLineWidth(3.0)
+            triad.GetYAxesLinesProperty().SetLineWidth(3.0)
+            triad.GetZAxesLinesProperty().SetLineWidth(3.0)
+            triad.XAxisLabelVisibilityOff()
+            triad.YAxisLabelVisibilityOff()
+            triad.ZAxisLabelVisibilityOff()
+            triad.XAxisTickVisibilityOff()
+            triad.YAxisTickVisibilityOff()
+            triad.ZAxisTickVisibilityOff()
+            triad.XAxisMinorTickVisibilityOff()
+            triad.YAxisMinorTickVisibilityOff()
+            triad.ZAxisMinorTickVisibilityOff()
+
+            renderer.SetViewport(xmins[j], ymins[j],
+                                 xmaxs[j], ymaxs[j])
+            renderer.AddActor(actor)
+            renderer.AddActor2D(scalar_bar)
+            renderer.AddActor(triad)
+            renderer.ResetCamera()
+            renwin.Render()
+
+        iren.AddObserver('TimerEvent', cb.execute)
+        iren.AddObserver('KeyPressEvent', cb.Keypress)
+
+        iren.Start()
