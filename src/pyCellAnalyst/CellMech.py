@@ -536,7 +536,7 @@ class CellMech(object):
                     self.timer_count = 0
                 warpVector = vtk.vtkWarpVector()
                 warpVector.SetInputData(pd)
-                warpVector.SetScaleFactor(0.1 * self.timer_count)
+                warpVector.SetScaleFactor(0.1 * (self.timer_count + 1))
                 warpVector.Update()
                 poly = warpVector.GetPolyDataOutput()
                 getScalars = vtk.vtkExtractVectorComponents()
@@ -564,7 +564,8 @@ class CellMech(object):
                     calc.SetInputData(scalars[k])
                     calc.AddScalarArrayName(names[k])
                     calc.SetResultArrayName(names[k])
-                    calc.SetFunction("%s * %f" % (names[k], self.timer_count))
+                    calc.SetFunction(
+                        "%s * 0.1 * %f" % (names[k], self.timer_count + 1))
                     calc.Update()
                     mapper = vtk.vtkPolyDataMapper()
                     mapper.SetInputData(calc.GetOutput())

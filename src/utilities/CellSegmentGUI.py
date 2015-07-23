@@ -434,7 +434,8 @@ class Application(Frame):
         settings = [('Align with a rigid rotation initially', 'rigidInitial'),
                     ('Perform Deformable Image Registration', 'defReg'),
                     ('Save for Finite Element Analysis', 'saveFEA'),
-                    ('Display Registration Results', 'deformableDisplay')]
+                    ('Display Registration Results', 'deformableDisplay'),
+                    ('Generate Plots', 'makePlots')]
 
         for i, (t, v) in enumerate(settings):
             if i == 1:
@@ -1307,12 +1308,15 @@ class Application(Frame):
                 if self.intSettings["makePlots"].get():
                     key = "Cell {:d}".format(j + 1)
                     self.results[key][shortname] = OrderedDict([
-                        ("Max Compression", w[2]),
-                        ("Max Tension", w[0]),
+                        ("Max Compression", w[0]),
+                        ("Max Tension", w[2]),
                         ("Max Shear", 0.5 * np.abs(w[2] - w[0])),
-                        ("Volume", mech.vstrains[j])])
-                    self.aggregate[shortname]['Max Compression'][j] = w[2]
-                    self.aggregate[shortname]['Max Tension'][j] = w[0]
+                        ("Volume", mech.vstrains[j]),
+                        ("Height", None),
+                        ("Width", None),
+                        ("Depth", None)])
+                    self.aggregate[shortname]['Max Compression'][j] = w[0]
+                    self.aggregate[shortname]['Max Tension'][j] = w[2]
                     self.aggregate[shortname]['Max Shear'][j] = 0.5 * np.abs(
                         w[2] - w[0])
                     self.aggregate[shortname]['Volume'][j] = mech.vstrains[j]
@@ -1346,11 +1350,11 @@ class Application(Frame):
                                                              raxes[1] - 1)
                     self.results[key][shortname]["Width"] = (daxes[2] /
                                                              raxes[2] - 1)
-                    self.aggregate[shortname]['Height'][j] = (daxes[0] /
+                    self.aggregate[shortname]["Height"][j] = (daxes[0] /
                                                               raxes[0] - 1)
-                    self.aggregate[shortname]['Depth'][j] = (daxes[1] /
+                    self.aggregate[shortname]["Depth"][j] = (daxes[1] /
                                                              raxes[1] - 1)
-                    self.aggregate[shortname]['Width'][j] = (daxes[2] /
+                    self.aggregate[shortname]["Width"][j] = (daxes[2] /
                                                              raxes[2] - 1)
 
         if self.intSettings['makePlots'].get():
@@ -1407,6 +1411,8 @@ class Application(Frame):
             fig2.set_size_inches([3.34646, 3.34646])
             rects = []
             for j, case in enumerate(self.results[k].keys()):
+                if k == "Tissue":
+                    continue
                 dat = np.array([self.results[k][case]["Height"],
                                 self.results[k][case]["Width"],
                                 self.results[k][case]["Depth"],
@@ -1420,6 +1426,7 @@ class Application(Frame):
             ax2.axhline(y=0.0, color='k')
             fig2.savefig(string.join([pardir, os.sep, "Ellipsoidal_",
                                       k, "_", ts, ".svg"], ''))
+            plt.close('all')
         figLegend1 = plt.figure()
         plt.figlegend(*ax.get_legend_handles_labels(), loc='upper left')
         figLegend1.savefig(string.join(
@@ -1428,6 +1435,7 @@ class Application(Frame):
         plt.figlegend(*ax.get_legend_handles_labels(), loc='upper left')
         figLegend2.savefig(string.join(
             [pardir, os.sep, "Ellipsoidal_Legend_", ts, ".svg"], ''))
+        plt.close('all')
 
     def open_smoothing_reference(self, *args):
         webbrowser.open_new(self.smoothingLink)
