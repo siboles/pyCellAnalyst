@@ -285,7 +285,7 @@ class CellMech(object):
             idWriter = vtk.vtkXMLUnstructuredGridWriter()
             idWriter.SetFileName(
                 str(os.path.normpath(self._def_dir + os.sep +
-                                     'cell{:02d}.vtu'.format(r + 1))))
+                                     'cell{:04d}.vtu'.format(r + 1))))
             idWriter.SetInputData(self.cell_fields[r])
             idWriter.Write()
             if self.display:
@@ -372,9 +372,7 @@ class CellMech(object):
         # O - perform mesh optimization
         #     optlevel=9
         mesh = build(s, options=Options("pq1.2YO",
-                                        optlevel=9,
-                                        minangle=15,
-                                        optpasses=10))
+                                        optlevel=9))
         elements = list(mesh.elements)
         nodes = list(mesh.points)
         faces = np.array(mesh.faces)
