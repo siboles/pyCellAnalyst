@@ -90,7 +90,8 @@ class Application(Frame):
                             'defReg': IntVar(value=0),
                             'saveFEA': IntVar(value=0),
                             'makePlots': IntVar(value=1),
-                            'deformableDisplay': IntVar(value=1)}
+                            'deformableDisplay': IntVar(value=1),
+                            'depth_adjust': IntVar(value=0)}
 
         self.smoothingMethods = ['None',
                                  'Median',
@@ -192,7 +193,8 @@ class Application(Frame):
                     ('Perform Morphogical Opening', 'opening'),
                     ('Fill Holes', 'fillHoles'),
                     ('Handle Overlap', 'handleOverlap'),
-                    ('Debug Mode', 'debug')]
+                    ('Debug Mode', 'debug'),
+                    ('Equalize Intensity Over Depth', 'depth_adjust')]
         row = 6
         shift = 0
         for i, v in enumerate(settings):
@@ -202,8 +204,8 @@ class Application(Frame):
                                                               column=i - shift,
                                                               padx=5, pady=5,
                                                               sticky=NW)
-            if (i + 1) % 4 == 0:
-                row = 7
+            if (i + 1) % 3 == 0:
+                row += 1
                 shift = i + 1
 
         ######################################################################
@@ -213,7 +215,7 @@ class Application(Frame):
                                     font=('Helvetica', '20', 'bold'))
         self.buttonExecute["text"] = "Execute Segmentation"
         self.buttonExecute["command"] = self.run_segmentation
-        self.buttonExecute.grid(row=8, column=0, columnspan=5,
+        self.buttonExecute.grid(row=row + 1, column=0, columnspan=5,
                                 padx=5, pady=5, sticky=W + E)
         #smoothing/denoising
         methods = [("None", 1),
@@ -1157,6 +1159,7 @@ class Application(Frame):
                          bright=self.intSettings['removeBright'].get(),
                          enhance_edge=self.intSettings[
                              'edgeEnhancement'].get(),
+                         depth_adjust=self.intSettings['depth_adjust'].get(),
                          smoothing_method=self.smoothingMethods[
                              self.intSettings['smoothingMethod'].get() - 1],
                          debug=self.intSettings['debug'].get(),

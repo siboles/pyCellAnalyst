@@ -48,6 +48,7 @@ class Volume(object):
                  two_dim=False,
                  bright=False,
                  enhance_edge=False,
+                 depth_adjust=False,
                  display=True,
                  handle_overlap=True,
                  debug=False,
@@ -109,6 +110,8 @@ class Volume(object):
                              (radius 6)
         enhance_edge         TYPE: Boolean. Whether to enhance the edges with
                              Laplacian sharpening
+        depth_adjust         TYPE: Boolean. Adjust image intensity by a linear
+                             function fit to the max intensity vs depth.
         display              TYPE: Boolean. Spawn a window to render the cells
                              or not.
         handle_overlap       TYPE: Boolean. If labelled objects overlap,
@@ -154,6 +157,7 @@ class Volume(object):
         self.two_dim = two_dim
         self.bright = bright
         self.enhance_edge = enhance_edge
+        self.depth_adjust = depth_adjust
         self.debug = debug
         try:
             if self.debug:
@@ -169,6 +173,9 @@ class Volume(object):
         self.opening = opening
         # read in the TIFF stack
         self._parseStack()
+        if self.depth_adjust:
+            self.adjustForDepth()
+
         # define a blank image with the same size and spacing as
         # image stack to add segmented cells to
         self.cells = sitk.Image(self._img.GetSize(), self._imgType)
@@ -1135,6 +1142,7 @@ class Volume(object):
                           0, self._img.GetSize()[1],
                           0, self._img.GetSize()[2]]
                 iso = vtk.vtkImageMarchingCubes()
+                iso.ComputeNormalsOn()
             else:
                 roi = sitk.RegionOfInterest(self.cells == (i + 1),
                                             c[3:5], c[0:2])
@@ -1329,6 +1337,32 @@ class Volume(object):
         self.volumes = labelstats['volume']
         self.centroids = labelstats['centroid']
         self.dimensions = labelstats['ellipsoid diameters']
+
+    def adjustForDepth(self):
+        stack = []
+        intensities = []
+        size = self._img.GetSize()
+        intensities = np.zeros(size[2], np.float32)
+        for sl in xrange(size[2]):
+            s = sitk.Extract(self._img, [size[0], size[1], 0], [0, 0, sl])
+            intensities[sl] = self._getMinMax(s)[1]
+            stack.append(s)
+        low = np.percentile(intensities, 2)
+        high = np.percentile(intensities, 98)
+        w = np.ones(size[2], np.float32)
+        w[intensities < low] = 0.0
+        w[intensities > high] = 0.0
+        x = np.arange(size[2], dtype=np.float32)
+        fit = np.polyfit(x, intensities, 1, w=w)
+        ratios = fit[1] / (fit[0] * x + fit[1])
+        for i, s in enumerate(stack):
+            stack[i] = sitk.Cast(s, sitk.sitkFloat32) * ratios[i]
+        nimg = sitk.JoinSeries(stack)
+        nimg.SetOrigin(self._img.GetOrigin())
+        nimg.SetSpacing(self._img.GetSpacing())
+        nimg.SetDirection(self._img.GetDirection())
+        sitk.Cast(nimg, self._img.GetPixelIDValue())
+        self._img = nimg
 
     def smooth2D(self, img):
         stack = []
