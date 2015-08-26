@@ -1251,7 +1251,8 @@ class Application(Frame):
                 tissue_tensile = ecm_w[2]
                 tissue_compressive = ecm_w[0]
                 tissue_shear = 0.5 * np.abs(ecm_w[2] - ecm_w[0])
-                tissue_vol = np.linalg.det(mech.ecm_strain) - 1.0
+                tissue_vol = np.sqrt(
+                    np.linalg.det(2 * mech.ecm_strain + np.eye(3))) - 1.0
                 ofid.write(("Tissue, {:f}, {:f}, {:f}, {:f}, {:f}, {:f}, "
                             "{:f}, {:f}, {:f}, {:f}, {:f}\n")
                            .format(mech.ecm_strain[0, 0],
@@ -1260,7 +1261,7 @@ class Application(Frame):
                                    mech.ecm_strain[0, 1],
                                    mech.ecm_strain[0, 2],
                                    mech.ecm_strain[1, 2],
-                                   np.linalg.det(mech.ecm_strain) - 1.0,
+                                   tissue_vol,
                                    np.sqrt((ecm_w[2] - ecm_w[1]) ** 2 +
                                            (ecm_w[1] - ecm_w[0]) ** 2 +
                                            (ecm_w[2] - ecm_w[0]) ** 2),
