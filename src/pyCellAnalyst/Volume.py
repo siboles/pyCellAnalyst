@@ -1011,7 +1011,8 @@ class Volume(object):
             cv = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
             cv.SetNumberOfIterations(iterations)
             cv.UseImageSpacingOn()
-            cv.SetHeavisideStepFunction(1)
+            cv.SetHeavisideStepFunction(0)
+            cv.SetReinitializationSmoothingWeight(5.0)
             cv.SetEpsilon(upsampling)
             cv.SetCurvatureWeight(curvature)
             cv.SetLambda1(lambda1)
@@ -1169,7 +1170,7 @@ class Volume(object):
                 iso.Update()
 
             else:
-                resampler.SetInterpolator(sitk.sitkBSpline)
+                resampler.SetInterpolator(sitk.sitkLinear)
                 lvlset = resampler.Execute(self.levelsets[i])
                 lvl_roi = sitk.RegionOfInterest(lvlset, c[3:], c[0:3])
                 lvlset = sitk.Cast(roi, sitk.sitkFloat32) * lvl_roi
@@ -1194,10 +1195,15 @@ class Volume(object):
 
             if self._img.GetDimension() == 3:
                 smooth = vtk.vtkWindowedSincPolyDataFilter()
-                smooth.SetNumberOfIterations(100)
                 smooth.SetInputConnection(triangles.GetOutputPort())
-                smooth.Update()
-                self.surfaces.append(smooth.GetOutput())
+                if self.active == "Nope":
+                    smooth.SetNumberOfIterations(200)
+                    smooth.Update()
+                    self.surfaces.append(smooth.GetOutput())
+                else:
+                    smooth.SetNumberOfIterations(100)
+                    smooth.Update()
+                    self.surfaces.append(smooth.GetOutput())
                 filename = 'cell{:02d}.stl'.format(i + 1)
                 stl.SetFileName(
                     str(os.path.normpath(self._output_dir +

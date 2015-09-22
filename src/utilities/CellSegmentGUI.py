@@ -1061,9 +1061,19 @@ class Application(Frame):
             values = pickle.load(fid)
             fid.close()
             for key in self.settings:
-                self.settings[key].set(values['Settings'][key])
+                try:
+                    self.settings[key].set(values['Settings'][key])
+                except:
+                    print(("WARNING: Failed to detect a value for {:s} "
+                           "in file.\n The settings file was probably saved "
+                           "by a previous version.").format(key))
             for key in self.intSettings:
-                self.intSettings[key].set(values['ButtonStates'][key])
+                try:
+                    self.intSettings[key].set(values['ButtonStates'][key])
+                except:
+                    print(("WARNING: Failed to detect a value for {:s} "
+                           "in file.\n The settings file was probably saved "
+                           "by a previous version.").format(key))
         self.populateSmoothingSettings()
         self.populateThresholdSettings()
         self.populateActiveContourSettings()

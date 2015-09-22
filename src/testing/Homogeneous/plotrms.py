@@ -6,13 +6,15 @@ fid = open("results.pkl", "rb")
 data = pickle.load(fid)
 fid.close()
 
+'''
 order = np.zeros(data["truth"].shape, np.uint32)
 ind = np.arange(data["truth"][:, 0, 0].size)
 for i in xrange(3):
     for j in xrange(3):
         order[:, i, j] = np.argsort(data["truth"][:, i, j])
+
 f, ax = plt.subplots(3, 2, sharex=True)
-f.set_size_inches([2 * 3.34646, 3 * 3.34646])
+f.set_size_inches([7, 7])
 
 ax[0, 0].fill_between(ind, data["residual"][order[:, 0, 0], 0, 0],
                       0, alpha=.9,
@@ -58,6 +60,54 @@ ax[2, 1].fill_between(ind,
 ax[2, 1].fill_between(ind,
                       data["residual"][order[:, 1, 2], 1, 2],
                       0, alpha=0.9, linewidth=0.0, facecolor='red')
+'''
+f, ax = plt.subplots(3, 2, sharex=True)
+f.set_size_inches([7, 7])
+ind = np.arange(data["truth"][:, 0, 0].size)
+ax[0, 0].fill_between(ind, data["residual"][:, 0, 0],
+                      0, alpha=.9,
+                      linewidth=0.0, facecolor='red')
+ax[0, 0].fill_between(ind, data["residual"][:, 0, 0],
+                      data["truth"][:, 0, 0], alpha=0.5,
+                      linewidth=0.0, facecolor='green')
+
+ax[1, 0].fill_between(ind, data["residual"][:, 1, 1],
+                      data["truth"][:, 1, 1], alpha=0.5,
+                      linewidth=0.0, facecolor='green')
+ax[1, 0].fill_between(ind, data["residual"][:, 1, 1],
+                      0, alpha=.9,
+                      linewidth=0.0, facecolor='red')
+
+ax[2, 0].fill_between(ind, data["residual"][:, 2, 2],
+                      data["truth"][:, 2, 2], alpha=0.5,
+                      linewidth=0.0, facecolor='green')
+ax[2, 0].fill_between(ind, data["residual"][:, 2, 2],
+                      0, alpha=.9,
+                      linewidth=0.0, facecolor='red')
+
+ax[0, 1].fill_between(ind,
+                      data["residual"][:, 0, 1],
+                      data["truth"][:, 0, 1],
+                      alpha=0.5, linewidth=0.0, facecolor='green')
+ax[0, 1].fill_between(ind,
+                      data["residual"][:, 0, 1],
+                      0, alpha=0.9, linewidth=0.0, facecolor='red')
+
+ax[1, 1].fill_between(ind,
+                      data["residual"][:, 0, 2],
+                      data["truth"][:, 0, 2],
+                      alpha=0.5, linewidth=0.0, facecolor='green')
+ax[1, 1].fill_between(ind,
+                      data["residual"][:, 0, 2],
+                      0, alpha=0.9, linewidth=0.0, facecolor='red')
+
+ax[2, 1].fill_between(ind,
+                      data["residual"][:, 1, 2],
+                      data["truth"][:, 1, 2],
+                      alpha=0.5, linewidth=0.0, facecolor='green')
+ax[2, 1].fill_between(ind,
+                      data["residual"][:, 1, 2],
+                      0, alpha=0.9, linewidth=0.0, facecolor='red')
 shear_titles = ("$E_{xy}}$", "$E_{xz}$", "$E_{yz}$")
 normal_titles = ("$E_{xx}$", "$E_{yy}$", "$E_{zz}$")
 
@@ -65,7 +115,11 @@ for i in xrange(3):
     ax[i, 1].yaxis.tick_right()
     ax[i, 1].set_title(shear_titles[i], y=1.02)
     ax[i, 0].set_title(normal_titles[i], y=1.02)
+    ax[i, 1].axhline(0.0, color='k')
+    ax[i, 0].axhline(0.0, color='k')
     [l.set_visible(False) for l in ax[i, 0].get_xticklabels()]
     [l.set_visible(False) for l in ax[i, 1].get_xticklabels()]
-
+    ax[i, 0].autoscale(tight=True)
+    ax[i, 1].autoscale(tight=True)
+plt.tight_layout()
 plt.savefig("rms_error.svg")

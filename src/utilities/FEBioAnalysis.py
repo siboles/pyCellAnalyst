@@ -154,7 +154,7 @@ class Application(Frame):
             model = febio.Model(modelfile=modelname,steps=[{'Displace':'solid'}])
 
             mat = febio.MatDef(matid=1,mname='cell',mtype='neo-Hookean',elsets='cell',
-                               attributes={'density':'0.001','E':'1.0','v':'0.3'})
+                               attributes={'density':'0.001','E':'1.0e-9','v':'0.3'})
 
             model.addMaterial(mat)
 
@@ -287,29 +287,29 @@ class Application(Frame):
                 except:
                     pass
                 for m in self.matched:
-                    plt.figure()
+                    fig, ax = plt.subplots()
+                    #fig.set_size_inches(2.5, 2.5)
                     for f in m:
                         if "Windows" in self.op_sys: 
                             trunc_name = f.rsplit("\\",2)
                         else:
                             trunc_name = f.rsplit("/",2)
 
-                        plt.bar(self.histograms[output][f]['bins'],
-                                self.histograms[output][f]['heights'],
-                                self.histograms[output][f]['width'],
-                                label = trunc_name[1])
-                    plt.legend()
+                        ax.bar(self.histograms[output][f]['bins'],
+                               self.histograms[output][f]['heights'],
+                               self.histograms[output][f]['width'],
+                               label = trunc_name[1])
                     object_name = string.replace(trunc_name[2],"cellFEA","Cell ")
                     object_name = string.replace(object_name,".pkl","")
-                    plt.title(output+' '+object_name)
+                    ax.set_title(output+' '+object_name)
                     try:
                         cell_directory = output_dir+'/histograms/'+string.replace(object_name,' ','_')
                         os.mkdir(cell_directory)
                     except:
                         pass
                     plt.tight_layout()
-                    plt.savefig(cell_directory+'/'+string.replace(output,' ','_')+'.svg')
-                    plt.clf()
+                    fig.savefig(cell_directory+'/'+string.replace(output,' ','_')+'.svg')
+                plt.close('all')
 
         for output in self.boxwhiskers.keys():
             if self.boxwhiskers[output]:
