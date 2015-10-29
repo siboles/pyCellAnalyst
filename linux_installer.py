@@ -138,8 +138,3 @@ except ImportError:
         print("Downloaded and extracted to /usr/lib. Please consult installation instructions to link libraries.")
     else:
         print("WARNING: A 32 bit binary of VTK is not available for Linux. Sorry, but you will have to build it from source.")
-        
-    
-    
-    
-    
