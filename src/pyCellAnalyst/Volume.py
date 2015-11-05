@@ -222,11 +222,15 @@ class Volume(object):
         #unless specified as 'User'
         if segmentation == 'Threshold':
             self.thresholdSegmentation()
+            self.active = False
         elif segmentation == 'Geodesic':
             self.geodesicSegmentation()
+            self.active = "Geodesic"
         elif segmentation == 'EdgeFree':
             self.edgeFreeSegmentation()
+            self.active = "EdgeFree"
         elif segmentation == 'User':
+            self.active = False
             pass
         else:
             raise SystemExit('{:s} is not a supported segmentation method.'
