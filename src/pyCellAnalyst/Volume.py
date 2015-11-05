@@ -12,8 +12,9 @@ import SimpleITK as sitk
 
 class Volume(object):
 
-    """
-    DESCRIPTION
+    r"""
+    Description
+    -----------
     This class will segment objects from 3-D images using user-specified
     routines. The intended purpose is for laser scanning fluorescence
     microscopy of chondrocytes and/or their surrounding matrices.
@@ -23,17 +24,108 @@ class Volume(object):
     segmentation='User' during Class instantiation, and call the segmentaion
     method with appropriate parameters.
 
-    Attributes:
-    cells        An image containing the segmented objects as integer labels.
-                 Has the same properties as the input image stack.
-    thresholds   The threshold level for each cell
-    volumes      List of the physical volumes of the segmented objects.
-    centroids    List of centroids of segmented objects in physical space.
-    surfaces     List containing VTK STL objects.
-    dimensions   List containing the ellipsoid axis lengths of segmented
-                 objects.
-    orientations List containing the basis vectors of ellipsoid axes.
-                 Same order as dimensions.
+    Parameters
+    ----------
+    vol_dir : str
+        This is required. Currently it is the path to a directory containing
+        a stack of TIFF images or a single NifTi (.nii) file. Other formats
+        may be supported in the future.
+    output_dir : str, optional
+        The directory in which to save results. If not specified, a directory
+        **vol_dir** + '_results' will be created and used.
+    regions : [,[int, int, int, int, int, int], ...], optional
+        Cropped regions bounding a single object to segment. In terms of voxel indices
+        the order for each region is:
+        [top left corner x, y, z, box edge length Lx, Ly, Lz].
+        If not specified, the entire image is considered as the region.
+    pixel_dim : [float=0.411, float=0.411, float=0.6835], optional
+        The physical dimensions of the voxel ordered x, y, and z. If there is a need to correct
+        a dimesion such as for the depth distortion in laser scanning microscopy, it should be
+        incorporated here. Defaults to [0.411, 0.411, 0.6835]
+    stain : str='Foreground', optional
+        * 'Foreground' indicates the objects of interest appear bright in the image.
+        * 'Background' indicates the objects of interest appear dark.
+    segmentation : str='Geodesic', optional
+        * 'Threshold' -- indicates to threshold the image at :math:`0.4\times intensity_{max}`.
+        * 'Geodesic' -- (default) peform a geodesic active contour segmentation with default settings.
+        * 'Edge-Free' -- perform an edge-free active contour segmentation with default dettins.
+        * 'User' -- The user will invoke calls to segmentation function with custom settings.
+    smoothing_method : str='Curvature Diffusion', optional
+        Smoothing method to use on regions of interest.
+
+        * 'None' -- No smoothing will be performed.
+        * 'Gaussian' -- Perform Gaussian smoothing.
+        * 'Median' -- Apply a median filter.
+        * 'Curvature Diffusion' -- Perform curvature-based anisotropic diffusion smoothing.
+        * 'Gradient Diffusion' -- Peform classical anisotropic diffusion smoothing.
+        * 'Bilateral' -- Apply a bilateral filter.
+        * 'Patch-based' -- Perform patch-based denoising.
+    smoothing_parameters : dict, optional
+        Depends on **smoothing_method**. Field keys are documented in methods **smoothRegion()**.
+    
+        * 'Gaussian' -- fields are:
+            * 'sigma': float=0.5
+        * 'Median' -- fields are:
+            * 'radius': (int=1, int=1, int=1)
+        * 'Curvature Diffusion' -- fields are:
+            * 'iterations': int=10
+            * 'conductance': float=9.0
+        * 'Gradient Diffusion' -- fields are:
+            * 'iterations': int=10
+            * 'conductance': float=9.0
+            * 'time step': float=0.01
+        * 'Bilateral' -- fields are:
+            * 'domainSigma': float=1.5
+            * 'rangeSigma': float=40.0
+            * 'samples': int=100
+        * 'Patch-based' -- fields are:
+            * 'radius': int=3
+            * 'iterations': int=10
+            * 'patches': int=20
+            * 'noise model: str='poisson'
+                * options: ('none', 'gaussian', 'poisson', 'rician')
+    two_dim : bool=False, optional
+        If *True*, will consider each 2-D slice in stack independently in smoothing and segmentation.
+        This is not recommended except in special cases.
+    bright : bool=False, optional
+        If *True*, will perform bright spot removal replacing voxels with intensities
+        :math:`\ge 98^{th}` percentile with median filtered (radius=6) value.
+    enhance_edge : bool=False, optional
+        If *True*, will enhance edges after smoothing using Laplacian sharpening.
+    depth_adjust : bool=False, optional
+        If *True*, will perform a linear correction for intensity degradation with depth.
+    opening : bool=True, optional
+        If *True*, will perform a morphological binary opening following thresholding to
+        remove spurious connections and islands. If object of interest is thin, this may
+        cause problems in which case, setting this to *False* may help.
+    fillholes : bool=False, optional
+        If *True*, all holes completely internal to the segmented object will be
+        considered as part of the object.
+
+    display : bool=True, optional
+        If *True*, will spawn a 3-D interactive window rendering of segmented object surfaces.
+    handle_overlap : bool=True, optional
+        If *True*, overlapping segmented objects will be reclassified using a Support Vector Machine.
+    debug : bool=False, optional
+        If *True*, will write additional images to disk in NifTi format for debugging purposes.
+
+    Attributes
+    ----------
+    cells : SimpleITK Image
+        An image containing the segmented objects as integer labels. Has the same properties as the
+        input image stack.
+    thresholds  : [, int, ...]
+        The threshold level for each cell
+    volumes : [, float, ...]
+        List of the physical volumes of the segmented objects.
+    centroids : [,[float, float, float], ...]1
+        List of centroids of segmented objects in physical space.
+    surfaces : [,vtkPolyData, ...]
+        List containing VTK STL objects.
+    dimensions : [,[float, float, float],...]
+        List containing the ellipsoid axis lengths of segmented objects.
+        These are determined from the segmented binary images. It is recommended
+        to use the values calculated from a 3-D mesh in the **CellMech** class.
     """
 
     def __init__(self,
@@ -54,87 +146,7 @@ class Volume(object):
                  debug=False,
                  opening=True,
                  fillholes=True):
-        """
-        INPUTS
-        vol_dir              TYPE: string. This is required. Currently it is
-                             the path to a directory containing a stack of
-                             TIFF images. Other formats may be supported in
-                             the future.
-        output_dir           TYPE: string. Directory to write STL surfaces to.
-                             If not specifed, will create a directory
-                             vol_dir+'_results'.
-        regions              TYPE: list of form [[pixel coordinate x, y, z,
-                             box edge length x, y, z],[...]].
-                             If not specified, assumes whole image region.
-        pixel_dim            TYPE: [float, float, float].
-                             The physical dimensions of the voxels in the
-                             image.
-        stain                TYPE: string. Indicates if the object to be
-                             segmented is the foreground or the background.
-        segmentation         TYPE: string. Execute indicated segmentation
-                             using default values.
-                             'User'      The user will invoke the segmentation
-                             method by calling the function.
-                             This allows for parameter specification.
-                             'Threshold' Thresholds based on a user-supplied
-                                         percentage of the maximum voxel
-                                         intensity. See thresholdSegmentation
-                                         for other methods available if 'User'
-                                         is indicated.
-                             'Geodesic'  Uses a geodesic active contour.
-                             'EdgeFree'  Uses an edge free active contour.
-        smoothing_method     TYPE: string. Smoothing method to use on
-                             regions of interest.
-        smoothing_parameters TYPE: dictionary. Change smoothing parameters
-                             of smoothing method from default by passing a
-                             dictionary with key and new value.
-                             Dictionary Defaults by Method:
-                             'Gaussian':            {'sigma': 0.5}
-                             'Median':              {'radius': (1, 1, 1)}
-                             'Curvature Diffusion': {'iterations': 10,
-                                                     'conductance': 9}
-                             'Gradient Diffusion':  {'iterations': 10,
-                                                     'conductance': 9,
-                                                     'time step': 0.01}
-                             'Bilateral':           {'domainSigma': 1.5,
-                                                     'rangeSigma': 5.0,
-                                                     'samples': 100}
-                             'Patch-based':         {'radius': 4,
-                                                     'iterations': 10,
-                                                     'patches': 20,
-                                                     'noise model': 'poisson'}
-        two_dim              TYPE: Boolean. If true treat each 2D slice in
-                             stack as independent.
-        bright               TYPE: Boolean. Whether to replace voxels higher
-                             than 98 percentile intensity with median value
-                             (radius 6)
-        enhance_edge         TYPE: Boolean. Whether to enhance the edges with
-                             Laplacian sharpening
-        depth_adjust         TYPE: Boolean. Adjust image intensity by a linear
-                             function fit to the max intensity vs depth.
-        display              TYPE: Boolean. Spawn a window to render the cells
-                             or not.
-        handle_overlap       TYPE: Boolean. If labelled objects overlap,
-                             employs Support Vector Machines to classify
-                             the shared voxels.
-        debug                TYPE: Boolean. If True, the following images
-                             depending on the segmentation method will be
-                             output to the output_dir.
-                             thresholdSegmentation:
-                              smoothed region of interest image as
-                              smoothed_[region id].nii e.g. smoothed_001.nii
-                             edgeFreeSegmentation:
-                              All of the above plus: seed image for each
-                              region as seed_[region id].nii e.g. seed_001.nii
-                             geodesicSegmentation:
-                              All of the above plus: edge map image for each
-                              region as edge_[region id].nii e.g. edge_001.nii
-        opening              TYPE: Boolean. If True, perform morphological
-                             opening. If object to detect is small or thin this
-                             setting this False, may be needed.
-        fillholes            TYPE: Boolean. If True, holes fully within the
-                             segmented object will be filled.
-        """
+
         warnings.filterwarnings("ignore")
 
         self._vol_dir = vol_dir
@@ -426,36 +438,33 @@ class Volume(object):
 
     def thresholdSegmentation(self, method='Percentage',
                               adaptive=True, ratio=0.4):
-        """
-        DESCRIPTION
-        Segments image based on a specified percentage of the maximum voxel
-        intensity in the specified region of interest.
-        For the case of multiple objects in the region, saves only the object
-        with the greatest volume.
+        r"""
+        Description
+        -----------
+        Segments object of interest from image using user-specified method.
 
-        INPUTS
-        method     TYPE: string. The thresholding method to use.
-                   OPTIONS
-                   'Percentage'  Threshold at percentage of the maximum voxel
-                                 intensity.
-                   'Otsu'
-                   For more information on the following consult
-                   http://www.insight-journal.org/browse/publication/811
-                   and cited original sources.
-                   'Huang'
-                   'IsoData'
-                   'Li'
-                   'MaxEntropy'
-                   'KittlerIllingworth'
-                   'Moments'
-                   'Yen'
-                   'RenyiEntropy'
-                   'Shanbhag'
-        ratio      TYPE: float. Percentage to threshold at if using
-                   'Percentage' method.
-        adaptive   TYPE: Boolean. Whether to adaptively adjust initial
-                   threshold until foreground does not touch the region
-                   boundaries.
+        Parameters
+        ----------
+        method : str='Percentage'
+            The thresholding method to use. Options are:
+
+            * 'Percentage' --  Threshold at percentage of the maximum voxel intensity.
+            * 'Otsu' -- Threshold using Otsu's method
+            * 'Huang' -- 
+            * 'IsoData'
+            * 'Li'
+            * 'MaxEntropy' -- Sets the threshold value such that the sum of information entropy (Shannon) in the foreground and background is maximized.
+            * 'KittlerIllingworth'
+            * 'Moments'
+            * 'Yen'
+            * 'RenyiEntropy' -- The same as 'MaxEntropy', but uses the Renyi entropy function.
+            * 'Shanbhag' -- Extends upon the entropy methods with fuzzy set theory.
+        ratio : float=0.4
+            Ratio of maximum voxel intensity in the region of interest to threshold at.
+            Only used if 'Percentage' method is given.
+        adaptive : bool=True
+            If *True* will adaptively adjust the determined threshold value until
+            the segmented object does not the region boundaries.
         """
         if method not in ['Percentage',
                           'Otsu',
@@ -693,68 +702,64 @@ class Volume(object):
                              canny_variance=(0.05, 0.05, 0.05),
                              cannyUpper=0.0,
                              cannyLower=0.0,
-                             propagation=0.3,
-                             curvature=0.1,
+                             propagation=0.15,
+                             curvature=0.2,
                              advection=1.0,
-                             rms=0.005,
+                             rms=0.01,
                              active_iterations=200):
         """
-        DESCRIPTION
+        Description
+        -----------
         Performs a segmentation using the SimpleITK implementation of the
         Geodesic Active Contour Levelset Segmentation method described in
-        (Caselles et al. 1997.)Please also consult SimpleITK's documentation
-        of GeodesicActiveContourLevelSetImageFilter.
-        This method will establish initial levelsets by calling the
-        entropySegmentation() method.
+        (Caselles et al. 1997.) Please also consult SimpleITK's documentation
+        of GeodesicActiveContourLevelSetImageFilter. This method will establish
+        the initial levelset function by calling the **thresholdSegmentation()**
+        method, and calculating a distance map from the resulting binary image.
 
-        INPUTS
-        upsampling           TYPE: integer. Resample image splitting original
-                             voxels into this many. NOTE - Resampling will
-                             always be performed to make voxels isotropic.
-        seed_method          TYPE: string. Method used to determine seed image.
-                             Same as thresholdSegmentation method variable.
+        Parameters
+        ----------
+        propagation : float=0.15
+            Weight for propagation term in active contour functional.
+            Higher values result in faster expansion.
+        curvature : float=0.2
+            Weight for curvature term in active contour functional.
+            Higher values result in smoother segmentation.
+        advection : float=1.0
+            Weight for advective term in active contour functional.
+            Higher values causes the levelset evolution to be drawn
+            and stick to edges.
+        rms : float=0.01
+            The change in root-mean-square difference  at which iterations
+            will terminate. This value is divided by the **upsampling** value
+            to account the effect of voxel size.
+        active_iterations : int=200
+            The maximum number of iterations the active contour will conduct.
+        upsampling : int=2, optional
+            Resample image splitting original voxels this many times.
+            Resampling will always be performed to make voxels isotropic,
+            because anisotropic voxels can degrade the performance of this algorithm.
+        seed_method : str='Percentage'
+            Thresholding method used to determine seed image; same as
+            **thresholdSegmentation()** **method** parameter. Please consult its
+            documentation.
+        adaptive : bool=True
+            If true will adaptively adjust threshold the threshold value until
+            resulting segmentation no longer touches the region of interest bounds.
+        ratio : float=0.7
+            The ratio to use with 'Percentage' threshold method. This plays no role
+            with other seed methods.
+        canny_variance : [float=0.05, float=0.05, float=0.05]
+            The Gaussian variance for canny edge detection used to generate the edge map for
+            this method. Gaussian smoothing is performed during edge detection, but if
+            another smoothing method was already performed this can be set low. High values
+            results in smoother edges, but risk losing edges when other objects are close.
+        cannyUpper : float=0.0
+            Ensures voxels in the image gradient with a value higher than this will always be
+            considered edges, and never discarded.
+        cannyLower : float=0.0
+            Ensures voxels in the image gradient with a value lower than this will be discarded.
 
-                          OPTIONS
-                          'Percentage'  Threshold at percentage of the maximum
-                                        voxel intensity.
-                          'Otsu'
-                          For more information on the following consult
-                          http://www.insight-journal.org/browse/publication/811
-                          and cited original sources.
-                          'Huang'
-                          'IsoData'
-                          'Li'
-                          'MaxEntropy'
-                          'KittlerIllingworth'
-                          'Moments'
-                          'Yen'
-                          'RenyiEntropy'
-                          'Shanbhag'
-        adaptive          TYPE: Boolean. If true will adaptively adjust
-                          threshold
-        ratio             TYPE: float. The ratio to use with 'Percentage' seed
-                          method. This plays no role with other seed methods.
-
-        canny_variance    TYPE: [float, float, float].
-                          Variance for canny edge detection.
-
-        cannyUpper        TYPE: float. Upper threshold for Canny edge detector.
-
-        cannyLower        TYPE: float. Lower threshold for Canny edge detector.
-
-        propagation       TYPE: float. Weight for propagation term in active
-                          contour functional.
-                          Higher results in faster expansion.
-        curvature         TYPE: float. Weight for curvature term in active
-                          contour functional. Higher results in
-                          smoother segmentation.
-        advection         TYPE: float. Weight for advective term in active
-                          contour functional.
-                          Higher causes levelset to move toward edges.
-        rms               TYPE: float. The change in Root Mean Square at which
-                          iterations will terminate.
-        active_iterations TYPE: integer. The maximum number of iterations the
-                          active contour will conduct.
         """
         self.active = "Geodesic"
         self.thresholdSegmentation(method=seed_method, ratio=ratio,
@@ -891,53 +896,40 @@ class Volume(object):
                              ratio=0.4,
                              lambda1=1.0,
                              lambda2=1.1,
-                             curvature=1.0,
+                             curvature=0.0,
                              iterations=20):
         """
-        DESCRIPTION
+        Description
+        -----------
         Performs a segmentation using the SimpleITK implementation of the
-        Active Contours Without Edges method described in
-        (Chan and Vese. 2001.)
-        Please also consult SimpleITK's documentation of
-        ScalarChanAndVeseDenseLevelSetImageFilter.
-        This method will establish initial levelsets by calling
-        the entropySegmentation() method.
+        Active Contours Without Edges method described in (Chan and Vese. 2001.)
+        Please also consult SimpleITK's documentation of ScalarChanAndVeseDenseLevelSetImageFilter.
 
-        INPUTS
-        upsampling  TYPE: integer. Resample image splitting original voxels
-                    into this many. NOTE - Resampling will always be performed
-                    to make voxels isotropic.
-        seed_method TYPE: string. Method used to determine seed image.
-                    Same as thresholdSegmentation method variable.
-
-                    OPTIONS
-                    'Percentage'  Threshold at percentage of the maximum
-                                  voxel intensity.
-                    'Otsu'
-                    For more information on the following consult
-                    http://www.insight-journal.org/browse/publication/811
-                    and cited original sources.
-                    'Huang'
-                    'IsoData'
-                    'Li'
-                    'MaxEntropy'
-                    'KittlerIllingworth'
-                    'Moments'
-                    'Yen'
-                    'RenyiEntropy'
-                    'Shanbhag'
-        adaptive    TYPE: Boolean. If true will adaptively adjust seed
-                    threshold.
-        ratio       TYPE: float. The ratio to use with 'Percentage'
-                    seed method. This plays no role with other seed methods.
-
-        lambda1     TYPE: float. Weight for internal levelset term.
-        lambda2     TYPE: float. Weight for external levelset term.
-        curvature   TYPE: float. Weight for curvature. Higher results
-                    in smoother levelsets, but less ability to capture
-                    fine features.
-        iterations  TYPE: integer. The number of iterations the active
-                    contour method will conduct.
+        Parameters
+        ----------
+        upsampling : int=2, optional
+            Resample image splitting original voxels this many times.
+            Resampling will always be performed to make voxels isotropic,
+            because anisotropic voxels can degrade the performance of this algorithm.
+        seed_method : str='Percentage'
+            Thresholding method used to determine seed image; same as
+            **thresholdSegmentation()** method parameter. Please consult its
+            documentation.
+        adaptive : bool=True
+            If true will adaptively adjust threshold the threshold value until
+            resulting segmentation no longer touches the region of interest bounds.
+        ratio : float=0.7
+            The ratio to use with 'Percentage' threshold method. This plays no role
+            with other seed methods.
+        lambda1 : float=1.0
+            Weight for internal levelset term contribution to the total energy.
+        lambda2 : float=1.1
+            Weight for external levelset term contribution to the total energy. 
+        curvature : float=0.0
+            Weight for curvature. Higher results in smoother levelsets, but less
+            ability to capture fine features.
+        iterations : int=20
+            The number of iterations the active contour method will conduct.
         """
         self.active = "EdgeFree"
         self.thresholdSegmentation(method=seed_method, ratio=ratio,
@@ -1069,6 +1061,19 @@ class Volume(object):
         self.cells = newcells
 
     def _classifyShared(self, i, cells, previous):
+        """
+        If segmented objects overlap and **handle_overlap** is *True*,
+        this will attempt to reclassify the shared voxels using the
+        thresholded seed to train a support vector machine. Of course,
+        this relies on the seed to not overlap. The user strategy to get
+        good results from this would be to use an active contour method,
+        with an aggressive thresholding method to produce the seed.
+
+        Returns
+        -------
+        A modified version of cells attribute with the overlapping objects
+        reclassified.
+        """
         #cells overlap so use SVM to classify shared voxels
         print("... ... ... WARNING: Segmentation overlapped a previous")
         print("... ... ... Using SVM to classify shared voxels")
@@ -1081,7 +1086,7 @@ class Volume(object):
             p1 = np.argwhere(t == (i + 1)) * ind2space
             print("\n")
         else:
-            print(("... ... ... The training data is often insufficient "
+            print(("... ... ... The training data are often insufficient "
                    "for this segmentation method."))
             print(("... ... ... Please consider using Geodesic or "
                    "EdgeFree options.\n"))
@@ -1118,12 +1123,7 @@ class Volume(object):
         return cells
 
     def writeSurfaces(self):
-        '''
-        if self._img.GetDimension() == 2:
-            print(("WARNING: A 2D image was processed, "
-                   "so there are no surfaces to write."))
-            return
-        '''
+        """"""
         #delete old surfaces
         old_surfaces = fnmatch.filter(os.listdir(self._output_dir), '*.stl')
         for f in old_surfaces:
@@ -1196,7 +1196,7 @@ class Volume(object):
             if self._img.GetDimension() == 3:
                 smooth = vtk.vtkWindowedSincPolyDataFilter()
                 smooth.SetInputConnection(triangles.GetOutputPort())
-                if self.active == "Nope":
+                if self.active == "EdgeFree":
                     smooth.SetNumberOfIterations(200)
                     smooth.Update()
                     self.surfaces.append(smooth.GetOutput())
@@ -1345,6 +1345,24 @@ class Volume(object):
         self.dimensions = labelstats['ellipsoid diameters']
 
     def adjustForDepth(self):
+        r"""
+        Iterates over slices in 3-D image stack and appends each slice's
+        maximum pixel intensity to a list. Then performs a weighted linear
+        curve fit with slices below the :math:`2^{nd}` percentile and above
+        the :math:`98^{th}` percentile assigned zero weights with all others
+        equally weighted. Ratios are then calculated from this fit for all z-depths
+        as:
+
+        :math:`\frac{a_0}{a_1 z + a_0}`
+
+        and each slice of the image is multiplied by its corresponding weight
+        and reassembled into a 3-D image.
+
+        Returns
+        -------
+        Replaces image read from disk with and image that is corrected for
+        intensity change with depth.
+        """
         stack = []
         intensities = []
         size = self._img.GetSize()
@@ -1435,31 +1453,35 @@ class Volume(object):
                    cannyLower, cannyUpper, canny_variance,
                    upsampling, active_iterations, rms,
                    propagation, curvature, advection):
-            gd = sitk.GeodesicActiveContourLevelSetImageFilter()
-            gd.SetMaximumRMSError(rms / float(upsampling))
-            gd.SetNumberOfIterations(active_iterations)
-            gd.SetPropagationScaling(propagation)
-            gd.SetCurvatureScaling(curvature)
-            gd.SetAdvectionScaling(advection)
-            stack = []
-            size = simg.GetSize()
-            for sl in xrange(size[2]):
-                im = sitk.Extract(simg, [size[0], size[1], 0], [0, 0, sl])
-                s = sitk.Extract(seed, [size[0], size[1], 0], [0, 0, sl])
-                canny = sitk.CannyEdgeDetection(
-                    sitk.Cast(im, sitk.sitkFloat32),
-                    lowerThreshold=cannyLower,
-                    upperThreshold=cannyUpper,
-                    variance=canny_variance)
-                canny = sitk.InvertIntensity(canny, 1)
-                canny = sitk.Cast(canny, sitk.sitkFloat32)
-                d = sitk.SignedMaurerDistanceMap(s,
-                                                 insideIsPositive=False,
-                                                 squaredDistance=False,
-                                                 useImageSpacing=True)
-                stack.append(gd.Execute(d, canny))
-            seg = sitk.JoinSeries(stack)
-            seg.SetSpacing(simg.GetSpacing())
-            seg.SetOrigin(simg.GetOrigin())
-            seg.SetDirection(simg.GetDirection())
-            return seg
+        """
+        A 2-D implementation of **geodesicSegmentation()** that operates
+        on each slice in the 3-D stack independently.
+        """
+        gd = sitk.GeodesicActiveContourLevelSetImageFilter()
+        gd.SetMaximumRMSError(rms / float(upsampling))
+        gd.SetNumberOfIterations(active_iterations)
+        gd.SetPropagationScaling(propagation)
+        gd.SetCurvatureScaling(curvature)
+        gd.SetAdvectionScaling(advection)
+        stack = []
+        size = simg.GetSize()
+        for sl in xrange(size[2]):
+            im = sitk.Extract(simg, [size[0], size[1], 0], [0, 0, sl])
+            s = sitk.Extract(seed, [size[0], size[1], 0], [0, 0, sl])
+            canny = sitk.CannyEdgeDetection(
+                sitk.Cast(im, sitk.sitkFloat32),
+                lowerThreshold=cannyLower,
+                upperThreshold=cannyUpper,
+                variance=canny_variance)
+            canny = sitk.InvertIntensity(canny, 1)
+            canny = sitk.Cast(canny, sitk.sitkFloat32)
+            d = sitk.SignedMaurerDistanceMap(s,
+                                             insideIsPositive=False,
+                                             squaredDistance=False,
+                                             useImageSpacing=True)
+            stack.append(gd.Execute(d, canny))
+        seg = sitk.JoinSeries(stack)
+        seg.SetSpacing(simg.GetSpacing())
+        seg.SetOrigin(simg.GetOrigin())
+        seg.SetDirection(simg.GetDirection())
+        return seg

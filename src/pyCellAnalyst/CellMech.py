@@ -71,6 +71,9 @@ class CellMech(object):
     cell_fields : [,vtkUnstructuredGrid,...]
         Displacement vectors determined by deformable image registration interpolated to the vertices of object
         mesh in reference state.
+    rigid_transforms : [,vtkTransform,...]
+        Initial rigid body transforms applied to object in reference state to align with deformed state.
+        This is only populated if **rigidInitial** is *True*.
     """
 
     def __init__(self,
@@ -145,7 +148,12 @@ class CellMech(object):
 
     def _readstls(self):
         """
-        Read in STL files if self.surfaces is True
+        Reads in all STL files contained in directories indicated by **ref_dir** and **def_dir**.
+        Also calls **_make3Dmesh()** to create 3-D tetrahedral meshes.
+
+        Returns
+        -------
+        rsurfs, dsurfs
         """
         for fname in sorted(os.listdir(self._ref_dir)):
             if '.stl' in fname.lower():
@@ -544,6 +552,21 @@ class CellMech(object):
             self.dvols.append(totalVol)
 
     def _poly2img(self, ind):
+        """
+        Helper function called by **deformableRegistration()** that generates
+        images from polygonal surfaces in reference/deformed pairs. The voxel
+        dimension of these images is determined by the value for **Precision**
+        in **deformableSettings**.
+
+        Parameters
+        ----------
+        ind : int
+            The list index for the current object pair being analyzed.
+
+        Returns
+        -------
+            (Reference Image, Deformed Image, Tranformed Reference Surface)
+        """
         dim = int(np.ceil(1.0 / self.deformableSettings['Precision'])) + 10
         rpoly = vtk.vtkPolyData()
         rpoly.DeepCopy(self.rsurfs[ind])
