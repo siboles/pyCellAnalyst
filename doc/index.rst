@@ -14,6 +14,7 @@ Welcome to pyCellAnalyst's documentation!
 
 .. toctree::
    :maxdepth: 2
+   :glob:
    :numbered:
 
    installation
