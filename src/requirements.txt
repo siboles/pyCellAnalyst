@@ -1,5 +1,5 @@
 MeshPy==2014.1
-SimpleITK
+--allow-external SimpleITK==0.9.1 
 VTK==5.8.0
 febio==0.1.2
 matplotlib==1.3.1
