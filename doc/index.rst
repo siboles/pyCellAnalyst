@@ -33,14 +33,5 @@ Following object segmentation, the resulting polygonal surfaces in reference and
    :align: center
 
    A visualization of the optimal diffeomorphism mapping the reconstructed referece (red) and deformed (green) cells in the previous figure is shown here. This is one of three methods to characterize deformation provided within pyCellAnalyst. 
-   
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
 
 
