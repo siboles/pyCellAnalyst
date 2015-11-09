@@ -8,7 +8,7 @@ The autodocumentation for the pyCellAnalyst module is provided below.
    :glob:
    :numbered:
 
-.. automodule:: pyCellAnalyst
+.. automodule:: ../src/pyCellAnalyst
    :members: Volume, CellMech
    :undoc-members:
    :private-members:
