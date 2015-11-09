@@ -31,7 +31,6 @@ import os
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.pngmath',
-    'numpydoc',
     'sphinx.ext.autosummary'
 ]
 
