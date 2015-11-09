@@ -21,7 +21,7 @@ class Mock(MagicMock):
     def __getattr__(cls, name):
         return Mock()
 
-MOCK_MODULES = ['sklearn','meshpy', 'matplotlib.pyplot', 'vtk', 'SimpleITK', 'numpy', 'vtk.util', 'vtk.util.numpy_support']
+MOCK_MODULES = ['sklearn','meshpy.tet', 'matplotlib.pyplot', 'vtk', 'SimpleITK', 'numpy', 'vtk.util', 'vtk.util.numpy_support']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
