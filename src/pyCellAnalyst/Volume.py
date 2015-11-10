@@ -13,8 +13,6 @@ import SimpleITK as sitk
 class Volume(object):
 
     r"""
-    Summary
-    -------
     This class will segment objects from 3-D images using user-specified
     routines. The intended purpose is for laser scanning fluorescence
     microscopy of chondrocytes and/or their surrounding matrices.
@@ -443,8 +441,6 @@ class Volume(object):
     def thresholdSegmentation(self, method='Percentage',
                               adaptive=True, ratio=0.4):
         r"""
-        Description
-        -----------
         Segments object of interest from image using user-specified method.
 
         Parameters
@@ -712,8 +708,6 @@ class Volume(object):
                              rms=0.01,
                              active_iterations=200):
         """
-        Description
-        -----------
         Performs a segmentation using the SimpleITK implementation of the
         Geodesic Active Contour Levelset Segmentation method described in
         (Caselles et al. 1997.) Please also consult SimpleITK's documentation
@@ -903,8 +897,6 @@ class Volume(object):
                              curvature=0.0,
                              iterations=20):
         """
-        Description
-        -----------
         Performs a segmentation using the SimpleITK implementation of the
         Active Contours Without Edges method described in (Chan and Vese. 2001.)
         Please also consult SimpleITK's documentation of ScalarChanAndVeseDenseLevelSetImageFilter.
