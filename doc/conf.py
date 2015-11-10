@@ -39,7 +39,8 @@ sys.path.insert(0, os.path.abspath('../src/'))
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.pngmath',
-    'sphinx.ext.autosummary'
+    'sphinx.ext.autosummary',
+    'numpydoc'
 ]
 
 numpydoc_show_class_members = False
