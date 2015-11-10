@@ -13,8 +13,8 @@ import SimpleITK as sitk
 class Volume(object):
 
     r"""
-    Description
-    -----------
+    Summary
+    -------
     This class will segment objects from 3-D images using user-specified
     routines. The intended purpose is for laser scanning fluorescence
     microscopy of chondrocytes and/or their surrounding matrices.
