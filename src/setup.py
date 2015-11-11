@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name = 'pyCellAnalyst',
-    version = '1.0.0',
+    version = '1.0.1',
     package = ['pyCellAnalyst'],
     py_modules = ['pyCellAnalyst.__init__','pyCellAnalyst.Volume','pyCellAnalyst.CellMech', 'pyCellAnalyst.GUI', 'pyCellAnalyst.FEA_GUI'],
     author = 'Scott Sibole',
@@ -10,7 +10,7 @@ setup(
     license = 'MIT',
     description = 'An extensive module for image processing, segmentation, and deformation analysis. Initially aimed at processing 3-D microscopy of cells, this may have applications for other data types as well.',
     url = "https://github.com/siboles/pyCellAnalyst",
-    download_url = "https://github.com/siboles/pyCellAnalyst/tarball/1.0.0",
+    download_url = "https://github.com/siboles/pyCellAnalyst/tarball/1.0.1",
     install_requires = [
         "MeshPy==2014.1",
         "SimpleITK==0.9.1",
