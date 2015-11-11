@@ -1,7 +1,14 @@
 Segmentation and Analysis Graphical User Interface
 ==================================================
 
-A graphical user interface is packaged within the pyCellAnalyst module to allow for access to all features without a need for a knowledge of the Python language.
+A graphical user interface (GUI) is packaged within the pyCellAnalyst module to allow for access to all features without a need for a knowledge of the Python language.
+To start the GUI, open a command terminal anywhere and type:
+
+.. code-block:: guess
+
+   python -m pyCellAnalyst.GUI
+
+An example analysis video using ImageJ and this GUI can be found `here <https://youtu.be/ICasGix1Omo>`_.
 
 .. toctree::
    :maxdepth: 1
@@ -82,6 +89,6 @@ Kinematics Tab - Deformation Analysis Methods
    * Before performing the optimization to determine the best affine transformation between objects, will first find the optimal rigid body translation and rotation to align objects if checked.
    * If checked, perform deformable image registration to find the best non-uniform deformation that maps the reference to the deformed object(s).
    * If checked, save 3-D mesh information and displacements calculated by deformable image registration interpolated to the mesh boundary to a Python pickle file that can later be used to fully generate and solve finite element analyses of the the deformation.
-   * If checked, spawns a 3-D interactive rendering of the non-uniform displacements resulting from deformable image registration. The deformation can be animated by pressing the RIGHT-ARROW. Also, the frames of the animate can be saved to disk by pressing the UP-ARROW.
+   * If checked, spawns a 3-D interactive rendering of the non-uniform displacements resulting from deformable image registration. The deformation can be animated by pressing the RIGHT-ARROW. Also, the frames of the animation can be saved to disk by pressing the UP-ARROW.
    * If checked, bar plots of the results from the ellipsoidal and affine transformation methods reporting cell strains.
 
