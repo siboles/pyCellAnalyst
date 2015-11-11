@@ -16,17 +16,21 @@ I/O Tab - Input and Output, Segmentation Execution, Extra Options
 1. Save settings used in current analysis to a Python pickle file.
 2. Load settings from a previously saved Python pickle file.
 3. Load an Excel (.xls) file containing region of interest definitions for each image directory.
+
    * All regions of interest applicable to a specific image directory must be on a individual sheets.
    * The sheets must be in the order that the image directories are added.
 4. Add and the path to a directory containing the images.
+
    * Directories must be added corresponding to the order of the sheets in the region of interest file.
    * Directory paths will appear in the white box to the right after addtion.
 5. Remove selected directory from the list.
 6. Physical dimensions of image voxels.
+
    * If there is a necessary correction physical dimensions of the voxels, e.g., for laser scanning microscopy the z-spacing should be adjusted to account for depth distortion,  please account for it here.
 7. Upsample the image by this factor. This can help when an active contour model is employed.
 8. Check *Objects are Dark* if the objects of interest appear darkest in the image.
 9. Other options for the image processing and segmentation.
+
    * *Display Objects* - If checked will spawn a 3-D interactive rendering of the reconstructed objects with label indicated by color.
    * *Remove Bright Spots* - Will replace bright spots greater than or equal to the 98:sup:`th` percentile intensity.
    * *Edge Enhancement* - Enhance the edges in each region of interest using Laplacian sharpening.
@@ -58,6 +62,7 @@ Segmentation Tab - Object Segmentation and Display
 1. Thresholding method that can either serve as the complete segmentation method, or provide the initial seed for an active contour model.
 2. Brief description of the currently selected thresholding method.
 3. Threshold settings for currently selected method. All by the *Percentage* method require no additional settings.
+
    * If *Iterative Threshold Adjustment* is checked, the threshold will be adjusted until the thresholded object no longer touches the edge of the region of interest definition.
 4. Selection of active contour model to use.
 5. Brief description of the currently selected active contour model with general advice on its usage.
@@ -73,6 +78,7 @@ Kinematics Tab - Deformation Analysis Methods
 2. Load each directory containing segmented surfaces for each deformed state.
 3. Remove the selected deformed directory(ies) from the list.
 4. Options for the deformation analysis.
+
    * Before performing the optimization to determine the best affine transformation between objects, will first find the optimal rigid body translation and rotation to align objects if checked.
    * If checked, perform deformable image registration to find the best non-uniform deformation that maps the reference to the deformed object(s).
    * If checked, save 3-D mesh information and displacements calculated by deformable image registration interpolated to the mesh boundary to a Python pickle file that can later be used to fully generate and solve finite element analyses of the the deformation.
