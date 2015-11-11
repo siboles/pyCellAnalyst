@@ -10,6 +10,7 @@ Welcome to pyCellAnalyst's documentation!
 
    installation
    introduction
+   segdef_gui
    classes
    LICENSE
 
