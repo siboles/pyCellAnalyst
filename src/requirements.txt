@@ -2,7 +2,7 @@ MeshPy==2014.1
 --allow-external SimpleITK==0.9.1 
 --allow-external VTK==5.8.0
 febio==0.1.2
-matplotlib
+matplotlib==1.3.0
 numpy==1.8.2
 scikit-learn==0.15.0
 scipy==0.13.3
