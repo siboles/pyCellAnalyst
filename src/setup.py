@@ -10,7 +10,7 @@ setup(
     license = 'MIT',
     description = 'An extensive module for image processing, segmentation, and deformation analysis. Initially aimed at processing 3-D microscopy of cells, this may have applications for other data types as well.',
     url = "https://github.com/siboles/pyCellAnalyst",
-    download_url = "https://github.com/siboles/pyCellAnalyst/tarball/0.1.2",
+    download_url = "https://github.com/siboles/pyCellAnalyst/tarball/1.0.0",
     install_requires = [
         "MeshPy==2014.1",
         "SimpleITK==0.9.1",
@@ -21,6 +21,6 @@ setup(
         "scipy==0.13.3",
         "wquantiles==0.3",
         "xlrd==0.9.3",
-        "xlwt==0.7.5"
-    ]
+        "xlwt==0.7.5",
+    ],
 ) 
