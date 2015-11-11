@@ -57,6 +57,8 @@ class CellMech(object):
         Volumetric centroids of objects in deformed state.
     cell_strains : [,ndarray((3,3), float)
         Green-Lagrange strain tensors for object assuming uniform deformation.
+    vstrains : [, float, ...]
+        Volumetric strains of the analyzed objects.
     ecm_strain : ndarray((3,3), float)
         Green-Lagrange strain tensor for extracellular (extra-object) matrix assuming
         uniform deformation.
@@ -108,11 +110,13 @@ class CellMech(object):
         self.rcentroids = []
         self.dcentroids = []
         self.cell_strains = []
+        self.vstrains = []
         self.ecm_strain = None
         self.rvols = []
         self.dvols = []
         self.raxes = []
         self.daxes = []
+
 
         self.cell_fields = []
 
