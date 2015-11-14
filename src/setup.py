@@ -63,6 +63,7 @@ except ImportError:
     print("No version of VTK was detected. Downloading version 6.3.0...")
     if "windows" in platform.system().lower():
         urllib.urlretrieve("https://osf.io/396zp/?action=download&version=1","VTK-6.1.0-cp27-none-win32.whl")
+        subprocess.call("pip install VTK-6.1.0-cp27-none-win32.whl", shell=True)
     elif "linux" in platform.system().lower():
         urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
         "vtk_python.tar.gz")
