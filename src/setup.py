@@ -22,6 +22,11 @@ if proceed.lower() == "n":
     print("\nGoodbye!\n")
     raise(SystemExit)
 
+cached_win_wheels = (("https://osf.io/rag2d/?action=download&version=1", "numpy-1.9.2+mkl-cp27-none-win32.whl"),
+                     ("https://osf.io/dkptx/?action=download&version=1","scipy-0.15.1-cp27-none-win32.whl"),
+                     ("https://osf.io/5gpvy/?action=download&version=1","matplotlib-1.4.3-cp27-none-win32.whl"),
+                     ("https://osf.io/wy3qd/?action=download&version=1","MeshPy-2014.1-cp27-none-win32.whl"))
+
 print("\nWonderful! Here we go...\n")
 if not "windows" in platform.system().lower():
     f = open("requirements.txt", "r")
@@ -31,18 +36,12 @@ if not "windows" in platform.system().lower():
         else:
             subprocess.call("pip install {:s}".format(l), shell=True)
 else:
-    #install numpy from cached wheel
-    urllib.urlretrieve("https://osf.io/rag2d/?action=download&version=1","numpy-1.9.2+mkl-cp27-none-win32.whl")
-    subprocess.call("pip install numpy-1.9.2+mkl-cp27-none-win32.whl",shell=True)
-    os.remove("numpy-1.9.2+mkl-cp27-none-win32.whl")
-    #install scipy from cached wheel
-    urllib.urlretrieve("https://osf.io/dkptx/?action=download&version=1","scipy-0.15.1-cp27-none-win32.whl")
-    subprocess.call("pip install scipy-0.15.1-cp27-none-win32.whl",shell=True)
-    os.remove("scipy-0.15.1-cp27-none-win32.whl")
-    #install matplotlib from cached wheel
-    urllib.urlretrieve("https://osf.io/5gpvy/?action=download&version=1","matplotlib-1.4.3-cp27-none-win32.whl")
-    subprocess.call("pip install matplotlib-1.4.3-cp27-none-win32.whl",shell=True)
-    os.remove("matplotlib-1.4.3-cp27-none-win32.whl")
+    #Install cached wheels for things that require compilation (numpy, scipy, matplotlib, MeshPy)
+    for (l, f) in cached_win_wheels:
+        urllib.urlretrieve(l, f)
+        subprocess.call("pip install {:s}".format(f), shell=True)
+        os.remove(f)
+
     f = open("requirements.txt", "r")
     for l in f.readlines():
         if "SimpleITK" in l:
