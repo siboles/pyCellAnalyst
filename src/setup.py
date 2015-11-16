@@ -43,7 +43,7 @@ if "windows" in platform.system().lower():
                 dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
                 tcldir = fnmatch.filter(dirs, "tcl8.*")[0]
                 activatepath = os.path.join(venv, "Scripts")
-                subprocess.call("echo set TCL_LIBRARY={:s} > {:s}{:s}activate.bat".format(
+                subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}{:s}activate.bat".format(
                     tcldir, activatepath, os.sep))
 
 print("\nWonderful! Here we go...\n")
