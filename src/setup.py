@@ -23,13 +23,35 @@ if proceed.lower() == "n":
     raise(SystemExit)
 
 print("\nWonderful! Here we go...\n")
+if not "windows" in platform.system().lower():
+    f = open("requirements.txt", "r")
+    for l in f.readlines():
+        if "SimpleITK" in l:
+            subprocess.call("easy_install {:s}".format(l), shell=True)
+        else:
+            subprocess.call("pip install {:s}".format(l), shell=True)
+else:
+    #install numpy from cached wheel
+    urllib.urlretrieve("https://osf.io/rag2d/?action=download&version=1","numpy-1.9.2+mkl-cp27-none-win32.whl")
+    subprocess.call("pip install numpy-1.9.2+mkl-cp27-none-win32.whl",shell=True)
+    os.remove("numpy-1.9.2+mkl-cp27-none-win32.whl")
+    #install scipy from cached wheel
+    urllib.urlretrieve("https://osf.io/dkptx/?action=download&version=1","scipy-0.15.1-cp27-none-win32.whl")
+    subprocess.call("pip install scipy-0.15.1-cp27-none-win32.whl",shell=True)
+    os.remove("scipy-0.15.1-cp27-none-win32.whl")
+    #install matplotlib from cached wheel
+    urllib.urlretrieve("https://osf.io/5gpvy/?action=download&version=1","matplotlib-1.4.3-cp27-none-win32.whl")
+    subprocess.call("pip install matplotlib-1.4.3-cp27-none-win32.whl",shell=True)
+    os.remove("matplotlib-1.4.3-cp27-none-win32.whl")
+    f = open("requirements.txt", "r")
+    for l in f.readlines():
+        if "SimpleITK" in l:
+            subprocess.call("easy_install {:s}".format(l), shell=True)
+        elif any([s in l for s in ("numpy", "scipy", "matplotlib")]):
+            continue
+        else:
+            subprocess.call("pip install {:s}".format(l), shell=True)
 
-f = open("requirements.txt", "r")
-for l in f.readlines():
-    if "SimpleITK" in l:
-        subprocess.call("easy_install {:s}".format(l), shell=True)
-    else:
-        subprocess.call("pip install {:s}".format(l), shell=True)
 
 here = os.path.abspath(os.path.dirname(__file__))
 final_messages = []
