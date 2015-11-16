@@ -23,10 +23,10 @@ if proceed.lower() == "n":
     print("\nGoodbye!\n")
     raise SystemExit
 
-cached_win_wheels = (("https://osf.io/rag2d/?action=download&version=1", "numpy-1.9.2+mkl-cp27-none-win32.whl"),
-                     ("https://osf.io/dkptx/?action=download&version=1","scipy-0.15.1-cp27-none-win32.whl"),
-                     ("https://osf.io/5gpvy/?action=download&version=1","matplotlib-1.4.3-cp27-none-win32.whl"),
-                     ("https://osf.io/wy3qd/?action=download&version=1","MeshPy-2014.1-cp27-none-win32.whl"))
+cached_win_wheels = (("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/numpy-1.9.2+mkl-cp27-none-win32.whl", "numpy-1.9.2+mkl-cp27-none-win32.whl"),
+                     ("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/scipy-0.16.1-cp27-none-win32.whl","scipy-0.16.1-cp27-none-win32.whl"),
+                     ("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/matplotlib-1.3.1.win32-py2.7.exe","matplotlib-1.3.1.win32-py2.7.exe"),
+                     ("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/MeshPy-2014.1-cp27-none-win32.whl","MeshPy-2014.1-cp27-none-win32.whl"))
 
 if "windows" in platform.system().lower():
     venv = subprocess.call("echo %VIRTUAL_ENV%", shell=True)
@@ -57,8 +57,12 @@ if not "windows" in platform.system().lower():
 else:
     #Install cached wheels for things that require compilation (numpy, scipy, matplotlib, MeshPy)
     for (l, f) in cached_win_wheels:
+        print("Downloading {:s}...".format(f))
         urllib.urlretrieve(l, f)
-        subprocess.call("pip install {:s}".format(f), shell=True)
+        if "matplotlib" in f.lower():
+            subprocess.call("{:s}".format(f), shell=True)
+        else:
+            subprocess.call("pip install {:s}".format(f), shell=True)
         os.remove(f)
 
     f = open("requirements.txt", "r")
@@ -82,7 +86,9 @@ try:
     if float(vers[0:3]) < 6.1:
         print "Outdated version of VTK detected. Downloading version 6.3.0..."
         if "windows" in platform.system().lower():
-            urllib.urlretrieve("https://osf.io/396zp/?action=download&version=1","VTK-6.1.0-cp27-none-win32.whl")
+            urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
+            subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
+            os.remove("VTK-6.2.0-cp27-none-win32.whl")
         elif "linux" in platform.system().lower():
             urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
                                "vtk_python.tar.gz")
@@ -101,8 +107,9 @@ try:
 except ImportError:
     print("No version of VTK was detected. Downloading version 6.3.0...")
     if "windows" in platform.system().lower():
-        urllib.urlretrieve("https://osf.io/396zp/?action=download&version=1","VTK-6.1.0-cp27-none-win32.whl")
-        subprocess.call("pip install VTK-6.1.0-cp27-none-win32.whl", shell=True)
+        urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
+        subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
+        os.remove("VTK-6.2.0-cp27-none-win32.whl")
     elif "linux" in platform.system().lower():
         urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
         "vtk_python.tar.gz")
