@@ -7,6 +7,7 @@ import string
 import site
 import subprocess
 import shlex
+import fnmatch
 
 print("Thank you for choosing to install pyCellAnalyst!\n")
 print("For safety and stability, it is recommmended that pyCellAnalyst is installed\nin a Python virtual environment.\n")
@@ -20,12 +21,30 @@ proceed = raw_input("Do you wish to proceed (y/n)?") or "n"
 
 if proceed.lower() == "n":
     print("\nGoodbye!\n")
-    raise(SystemExit)
+    raise SystemExit
 
 cached_win_wheels = (("https://osf.io/rag2d/?action=download&version=1", "numpy-1.9.2+mkl-cp27-none-win32.whl"),
                      ("https://osf.io/dkptx/?action=download&version=1","scipy-0.15.1-cp27-none-win32.whl"),
                      ("https://osf.io/5gpvy/?action=download&version=1","matplotlib-1.4.3-cp27-none-win32.whl"),
                      ("https://osf.io/wy3qd/?action=download&version=1","MeshPy-2014.1-cp27-none-win32.whl"))
+
+if "windows" in platform.system().lower():
+    venv = subprocess.call("echo %VIRTUAL_ENV%", shell=True)
+    tcllib = subprocess.call("echo %TCL_LIBRARY%", shell=True)
+    if venv:
+        if not tcllib:
+            path = subprocess.call("echo %PATH%", shell=True)
+            if not "python27" in path.lower():
+                raise SystemExit("***Exiting***\npython.exe is not in system path.\nPlease add the location of python.exe to your PATH environment variable and rerun.")
+            else:
+                path = path.lower().split(";")
+                pythonstr = min(fnmatch.filter("python", path), key=len)
+                tcldir = os.path.join(pythonstr, "tcl")
+                dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
+                tcldir = fnmatch.filter(dirs, "tcl8.*")[0]
+                activatepath = os.path.join(venv, "Scripts")
+                subprocess.call("echo set TCL_LIBRARY={:s} > {:s}{:s}activate.bat".format(
+                    tcldir, activatepath, os.sep))
 
 print("\nWonderful! Here we go...\n")
 if not "windows" in platform.system().lower():
@@ -46,11 +65,10 @@ else:
     for l in f.readlines():
         if "SimpleITK" in l:
             subprocess.call("easy_install {:s}".format(l), shell=True)
-        elif any([s in l for s in ("numpy", "scipy", "matplotlib")]):
+        elif any([s in l.lower() for s in ("numpy", "scipy", "matplotlib", "meshpy")]):
             continue
         else:
             subprocess.call("pip install {:s}".format(l), shell=True)
-
 
 here = os.path.abspath(os.path.dirname(__file__))
 final_messages = []
