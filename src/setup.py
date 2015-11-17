@@ -62,8 +62,9 @@ else:
     modules = ("numpy", "scipy", "matplotlib", "meshpy.tet")
     for i, (l, f) in enumerate(cached_win_wheels):
             try:
-                eval("import {:s}".format(modules[i]))
-            except:
+                __import__(modules[i])
+                continue
+            except ImportError:
                 print("Downloading {:s}...".format(f))
                 urllib.urlretrieve(l, f)
             if modules[i] == "matplotlib":
@@ -99,7 +100,7 @@ try:
     if float(vers[0:3]) < 6.1:
         print "Outdated version of VTK detected. Downloading version 6.3.0..."
         if "windows" in platform.system().lower():
-            urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
+            urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
             subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
             os.remove("VTK-6.2.0-cp27-none-win32.whl")
         elif "linux" in platform.system().lower():
@@ -120,7 +121,7 @@ try:
 except ImportError:
     print("No version of VTK was detected. Downloading version 6.3.0...")
     if "windows" in platform.system().lower():
-        urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/blob/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
+        urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
         subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
         os.remove("VTK-6.2.0-cp27-none-win32.whl")
     elif "linux" in platform.system().lower():
