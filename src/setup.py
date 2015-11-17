@@ -1,6 +1,7 @@
 from setuptools import setup
 from codecs import open
 import os
+import shutil
 import urllib
 import platform
 import string
@@ -8,6 +9,7 @@ import site
 import subprocess
 import shlex
 import fnmatch
+import zipfile
 
 print("Thank you for choosing to install pyCellAnalyst!\n")
 print("For safety and stability, it is recommmended that pyCellAnalyst is installed\nin a Python virtual environment.\n")
@@ -22,31 +24,32 @@ proceed = raw_input("Do you wish to proceed (y/n)?") or "n"
 if proceed.lower() == "n":
     print("\nGoodbye!\n")
     raise SystemExit
+print("\nWonderful! Here we go...\n")
 
+# handle mess of dependencies
 cached_win_wheels = (("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/numpy-1.9.2+mkl-cp27-none-win32.whl", "numpy-1.9.2+mkl-cp27-none-win32.whl"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/scipy-0.16.1-cp27-none-win32.whl","scipy-0.16.1-cp27-none-win32.whl"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/matplotlib-1.3.1.win32-py2.7.exe","matplotlib-1.3.1.win32-py2.7.exe"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/MeshPy-2014.1-cp27-none-win32.whl","MeshPy-2014.1-cp27-none-win32.whl"))
 
 if "windows" in platform.system().lower():
-    venv = subprocess.call("echo %VIRTUAL_ENV%", shell=True)
-    tcllib = subprocess.call("echo %TCL_LIBRARY%", shell=True)
-    if venv:
-        if not tcllib:
-            path = subprocess.call("echo %PATH%", shell=True)
-            if not "python27" in path.lower():
-                raise SystemExit("***Exiting***\npython.exe is not in system path.\nPlease add the location of python.exe to your PATH environment variable and rerun.")
-            else:
-                path = path.lower().split(";")
-                pythonstr = min(fnmatch.filter("python", path), key=len)
-                tcldir = os.path.join(pythonstr, "tcl")
-                dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
-                tcldir = fnmatch.filter(dirs, "tcl8.*")[0]
-                activatepath = os.path.join(venv, "Scripts")
-                subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}{:s}activate.bat".format(
-                    tcldir, activatepath, os.sep))
+    path = os.getenv('PATH')
+    if not "python27" in path.lower():
+        raise SystemExit("***Exiting***\npython.exe is not in system path.\nPlease add the location of python.exe to your PATH environment variable and rerun.")
 
-print("\nWonderful! Here we go...\n")
+    venv = os.getenv('VIRTUAL_ENV')
+    if venv is not None:
+        tcllib = os.getenv('TCL_LIBRARY')
+        if tcllib is None:
+            path = path.lower().split(";")
+            pythonstr = min(fnmatch.filter("python", path), key=len)
+            tcldir = os.path.join(pythonstr, "tcl")
+            dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
+            tcldir = fnmatch.filter(dirs, "tcl8.*")[0]
+            activatepath = os.path.join(venv, "Scripts")
+            subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}{:s}activate.bat".format(
+                tcldir, activatepath, os.sep))
+
 if not "windows" in platform.system().lower():
     f = open("requirements.txt", "r")
     for l in f.readlines():
@@ -56,14 +59,24 @@ if not "windows" in platform.system().lower():
             subprocess.call("pip install {:s}".format(l), shell=True)
 else:
     #Install cached wheels for things that require compilation (numpy, scipy, matplotlib, MeshPy)
-    for (l, f) in cached_win_wheels:
-        print("Downloading {:s}...".format(f))
-        urllib.urlretrieve(l, f)
-        if "matplotlib" in f.lower():
-            subprocess.call("{:s}".format(f), shell=True)
-        else:
-            subprocess.call("pip install {:s}".format(f), shell=True)
-        os.remove(f)
+    modules = ("numpy", "scipy", "matplotlib", "meshpy.tet")
+    for i, (l, f) in enumerate(cached_win_wheels):
+            try:
+                eval("import {:s}".format(modules[i]))
+            except:
+                print("Downloading {:s}...".format(f))
+                urllib.urlretrieve(l, f)
+            if modules[i] == "matplotlib":
+                zfile = zipfile.ZipFile(f)
+                if venv is None:
+                    sitedir = os.path.join(pythonstr, "Lib", "site-packages")
+                    zfile.extractall(sitedir, zfile.namelist()[1:])
+                else:
+                    sitedir = os.path.join(venv, "Lib", "site-packages")
+                    zfile.extractall(sitedir, zfile.namelist()[1:])
+            else:
+                subprocess.call("pip install {:s}".format(f), shell=True)
+                os.remove(f)
 
     f = open("requirements.txt", "r")
     for l in f.readlines():
