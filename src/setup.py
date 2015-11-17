@@ -48,7 +48,7 @@ if "windows" in platform.system().lower():
             tcldir = os.path.join(tcldir, fnmatch.filter(dirs, "tcl8.*")[0])
             activatepath = os.path.join(venv, "Scripts", "activate.bat")
             print(tcldir, activatepath)
-            subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}".format(tcldir, activatepath))
+            subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}".format(tcldir, activatepath), shell=True)
 
 if not "windows" in platform.system().lower():
     f = open("requirements.txt", "r")
