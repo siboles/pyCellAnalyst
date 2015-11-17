@@ -75,6 +75,7 @@ else:
                 else:
                     sitedir = os.path.join(venv, "Lib", "site-packages")
                     zfile.extractall(sitedir)
+                os.remove("matplotlib.zip")
                 #dependencies that this hacked method does not handle
                 subprocess.call("pip install python-dateutil pyparsing", shell=True)
             else:
@@ -109,12 +110,18 @@ try:
             urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
                                "vtk_python.tar.gz")
             subprocess.call(shlex.split("tar -zxf vtk_python.tar.gz"))
-            subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk $VIRTUAL_ENV/lib/python2.7/site-packages", shell=True)
-            subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $VIRTUAL_ENV/lib/", shell=True)
+            if os.get_env('VIRTUAL_ENV') is not None:
+                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk $VIRTUAL_ENV/lib/python2.7/site-packages", shell=True)
+                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $VIRTUAL_ENV/lib/", shell=True)
+                final_messages.append(("Downloaded and extracted VTK 6.3.0 to $VIRTUAL_ENV/lib\n"
+                                       "... You'll need to link the libraries appropriately for your flavor."))
+            else:
+                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk /usr/local/lib/python2.7/dist-packages", shell=True)
+                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/lib* $/opt/vtk/", shell=True)
+                final_messages.append(("Downloaded and extracted VTK 6.3.0 to $VIRTUAL_ENV/lib\n"
+                                       "... You'll need to link the libraries appropriately for your flavor."))
             os.remove("vtk_python.tar.gz")
             subprocess.call(shlex.split("rm -r VTK-6.3.0-Linux-64bit"))
-            final_messages.append(("Downloaded and extracted VTK 6.3.0 to $VIRTUAL_ENV/lib/python2.7/site-packages/vtk\n"
-                                   "... You'll need to link the libraries appropriately for your flavor."))
 
         elif "darwin" in platform.system().lower():
             urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Darwin-64bit.dmg",
