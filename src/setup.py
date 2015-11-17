@@ -29,7 +29,7 @@ print("\nWonderful! Here we go...\n")
 # handle mess of dependencies
 cached_win_wheels = (("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/numpy-1.9.3+mkl-cp27-none-win32.whl", "numpy-1.9.3+mkl-cp27-none-win32.whl"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/scipy-0.16.1-cp27-none-win32.whl","scipy-0.16.1-cp27-none-win32.whl"),
-                     ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/PLATLIB.zip","PLATLIB.zip"),
+                     ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/matplotlib.zip","matplotlib.zip"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/MeshPy-2014.1-cp27-none-win32.whl","MeshPy-2014.1-cp27-none-win32.whl"))
 
 if "windows" in platform.system().lower():
@@ -71,10 +71,10 @@ else:
                 zfile = zipfile.ZipFile(f)
                 if venv is None:
                     sitedir = os.path.join(pythonstr, "Lib", "site-packages")
-                    zfile.extractall(sitedir, zfile.namelist()[1:])
+                    zfile.extractall(sitedir
                 else:
                     sitedir = os.path.join(venv, "Lib", "site-packages")
-                    zfile.extractall(sitedir, zfile.namelist()[1:])
+                    zfile.extractall(sitedir)
                 #dependencies that this hacked method does not handle
                 subprocess.call("pip install python-dateutil pyparsing", shell=True)
             else:
