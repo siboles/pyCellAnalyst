@@ -47,8 +47,3 @@ To perform deformation analysis on these segmented objects:
                 # and the optimal affine transformation between reference and deformed object pairs.
                 # Please consult the pyCellAnalyst.CellMech class reference below to explore parameter options.
                 mech = CellMech.CellMech("PATH_TO_REFERENCE_DIRECTORY", "PATH_TO_DEFORMED_DIRECTORY")
-                
-
-
-
-A graphical user interface, *src/utilities/CellSegmentGUI.py*, is also provided to circumvent the need to write a Python script.
