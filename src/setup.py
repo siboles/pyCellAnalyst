@@ -71,7 +71,7 @@ else:
                 zfile = zipfile.ZipFile(f)
                 if venv is None:
                     sitedir = os.path.join(pythonstr, "Lib", "site-packages")
-                    zfile.extractall(sitedir
+                    zfile.extractall(sitedir)
                 else:
                     sitedir = os.path.join(venv, "Lib", "site-packages")
                     zfile.extractall(sitedir)
