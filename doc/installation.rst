@@ -111,7 +111,7 @@ Again it is recommended that you are in a Python virtual environment when you do
 
      sudo pip install pyCellAnalyst
 
-   You will be prompted once by the installer to confirm whether to proceed. If you enter "y" installation will proceed; "n" will abort.
+  You will be prompted once by the installer to confirm whether to proceed. If you enter "y" installation will proceed; "n" will abort.
 
 * Install the latest version from github:
 
