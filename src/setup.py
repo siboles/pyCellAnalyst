@@ -45,10 +45,10 @@ if "windows" in platform.system().lower():
             pythonstr = min(fnmatch.filter(path, "*python*"), key=len)
             tcldir = os.path.join(pythonstr, "tcl")
             dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
-            tcldir = fnmatch.filter(dirs, "tcl8.*")[0]
-            activatepath = os.path.join(venv, "Scripts")
-            subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}{:s}activate.bat".format(
-                tcldir, activatepath, os.sep))
+            tcldir = os.path.join(tcldir, fnmatch.filter(dirs, "tcl8.*")[0])
+            activatepath = os.path.join(venv, "Scripts", "activate.bat")
+            print(tcldir, activatepath)
+            subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}".format(tcldir, activatepath))
 
 if not "windows" in platform.system().lower():
     f = open("requirements.txt", "r")
