@@ -75,6 +75,8 @@ else:
                 else:
                     sitedir = os.path.join(venv, "Lib", "site-packages")
                     zfile.extractall(sitedir, zfile.namelist()[1:])
+                #dependencies that this hacked method does not handle
+                subprocess.call("pip install python-dateutil pyparsing", shell=True)
             else:
                 subprocess.call("pip install {:s}".format(f), shell=True)
                 os.remove(f)
