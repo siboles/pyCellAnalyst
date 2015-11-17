@@ -47,7 +47,7 @@ To create a virtual environment on Windows do the following:
 
      .. code-block:: guess
 
-     deactivate
+        deactivate
    * For more commands please consult the `documentation <http://virtualenvwrapper.readthedocs.org/en/latest/command_ref.html>`_ and the `screencast <http://mathematism.com/2009/07/30/presentation-pip-and-virtualenv/>`_.
 
 In Linux or Mac do the following:
@@ -128,7 +128,7 @@ Again it is recommended that you are in a Python virtual environment when you do
 
         python setup.py install
 
-     You will be prompted once by the installer to confirm whether to proceed. If you enter "y" installation will proceed; "n" will abort.
+     You will be prompted once by the installer to confirm whether to proceed. If you enter *y*, installation will proceed; *n* will abort.
 
 Extra Tasks on Linux and Mac
 ----------------------------
