@@ -42,7 +42,7 @@ if "windows" in platform.system().lower():
         tcllib = os.getenv('TCL_LIBRARY')
         if tcllib is None:
             path = path.lower().split(";")
-            pythonstr = min(fnmatch.filter("python", path), key=len)
+            pythonstr = min(fnmatch.filter(path, "python"), key=len)
             tcldir = os.path.join(pythonstr, "tcl")
             dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
             tcldir = fnmatch.filter(dirs, "tcl8.*")[0]
