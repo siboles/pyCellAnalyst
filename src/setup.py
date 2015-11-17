@@ -27,9 +27,9 @@ if proceed.lower() == "n":
 print("\nWonderful! Here we go...\n")
 
 # handle mess of dependencies
-cached_win_wheels = (("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/numpy-1.9.2+mkl-cp27-none-win32.whl", "numpy-1.9.2+mkl-cp27-none-win32.whl"),
+cached_win_wheels = (("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/numpy-1.9.3+mkl-cp27-none-win32.whl", "numpy-1.9.3+mkl-cp27-none-win32.whl"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/scipy-0.16.1-cp27-none-win32.whl","scipy-0.16.1-cp27-none-win32.whl"),
-                     ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/matplotlib-1.3.1.win32-py2.7.exe","matplotlib-1.3.1.win32-py2.7.exe"),
+                     ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/PLATLIB.zip","PLATLIB.zip"),
                      ("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/MeshPy-2014.1-cp27-none-win32.whl","MeshPy-2014.1-cp27-none-win32.whl"))
 
 if "windows" in platform.system().lower():
