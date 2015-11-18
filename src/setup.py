@@ -75,6 +75,7 @@ else:
                 else:
                     sitedir = os.path.join(venv, "Lib", "site-packages")
                     zfile.extractall(sitedir)
+                zfile.close()
                 os.remove("matplotlib.zip")
                 #dependencies that this hacked method does not handle
                 subprocess.call("pip install python-dateutil pyparsing", shell=True)
