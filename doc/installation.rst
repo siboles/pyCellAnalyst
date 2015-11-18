@@ -97,25 +97,11 @@ In Linux or Mac do the following:
 Installing the Module and Dependencies
 --------------------------------------
 
-Again it is recommended that you are in a Python virtual environment when you do this installation (although it is not required). There are two ways to install.
-
-* Install the most recent release uploaded to PyPi.org by typing in a command terminal:
-
-  .. code-block:: guess
-
-     pip install pyCellAnalyst
-
-  If you are on Linux and **not** in a virtual environment this will need to be:
-
-  .. code-block:: guess
-
-     sudo pip install pyCellAnalyst
-
-  You will be prompted once by the installer to confirm whether to proceed. If you enter "y" installation will proceed; "n" will abort.
+Again it is recommended that you are in a Python virtual environment when you do this installation (although it is not required).
 
 * Install the latest version from github:
 
-  1. Either download and extract the .zip file or clone the repository using git.
+  1. Either download and extract the .zip `file <https://github.com/siboles/pyCellAnalyst/archive/master.zip>`_ or clone the `repository <https://github.com/siboles/pyCellAnalyst>`_  using git.
   2. Navigate to the *src* folder in the project where *setup.py* is located.
   3. Switch to the virtual environment you wish to install into e.g in a command terminal.
 
