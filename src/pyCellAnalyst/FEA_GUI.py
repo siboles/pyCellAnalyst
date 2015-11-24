@@ -19,7 +19,6 @@ from vtk.util import numpy_support
 from Tkinter import *
 from ttk import Notebook
 from collections import OrderedDict
-from FebPlt import FebPlt
 import numpy as np
 
 import matplotlib
@@ -518,7 +517,7 @@ class Application(Frame):
                 self.matched.append(fnmatch.filter(self.pickles, "*" + s))
             plotname = string.replace(f, '.pkl', '.xplt')
 
-            results = FebPlt(plotname)
+            results = febio.FebPlt(plotname)
             stress = np.zeros((len(self.data[f]['elements']), 3, 3), float)
             strain = np.copy(stress)
             #material element volumes

@@ -111,16 +111,24 @@ try:
             urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
                                "vtk_python.tar.gz")
             subprocess.call(shlex.split("tar -zxf vtk_python.tar.gz"))
-            if os.get_env('VIRTUAL_ENV') is not None:
+            if os.getenv('VIRTUAL_ENV') is not None:
                 subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk $VIRTUAL_ENV/lib/python2.7/site-packages", shell=True)
-                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $VIRTUAL_ENV/lib/", shell=True)
-                final_messages.append(("Downloaded and extracted VTK 6.3.0 to $VIRTUAL_ENV/lib\n"
-                                       "... You'll need to link the libraries appropriately for your flavor."))
+                try:
+                    os.mkdir(os.path.join(os.getenv('HOME'), "vtklib"))
+                except:
+                    pass
+                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $HOME/vtklib/", shell=True)
+                final_messages.append(("Downloaded and extracted VTK 6.3.0 to {:s}/vtklib\n"
+                                       "... You'll need to link the libraries appropriately for your flavor.").format(os.getenv('HOME')))
             else:
                 subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk /usr/local/lib/python2.7/dist-packages", shell=True)
-                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/lib* $/opt/vtk/", shell=True)
-                final_messages.append(("Downloaded and extracted VTK 6.3.0 to $VIRTUAL_ENV/lib\n"
-                                       "... You'll need to link the libraries appropriately for your flavor."))
+                try:
+                    os.mkdir(os.path.join(os.getenv('HOME'), "vtklib"))
+                except:
+                    pass
+                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/lib* $HOME/vtklib/", shell=True)
+                final_messages.append(("Downloaded and extracted VTK 6.3.0 to {:s}/lib\n"
+                                       "... You'll need to link the libraries appropriately for your flavor.").format(os.getenv('HOME')))
             os.remove("vtk_python.tar.gz")
             subprocess.call(shlex.split("rm -r VTK-6.3.0-Linux-64bit"))
 
@@ -135,16 +143,24 @@ except ImportError:
         subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
         os.remove("VTK-6.2.0-cp27-none-win32.whl")
     elif "linux" in platform.system().lower():
+        
+        subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/vtk-6.3.0-cp27-none-linux_x86_64.whl")
+        '''
         urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
         "vtk_python.tar.gz")
 
         subprocess.call(shlex.split("tar -zxf vtk_python.tar.gz"))
         subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk $VIRTUAL_ENV/lib/python2.7/site-packages", shell=True)
-        subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $VIRTUAL_ENV/lib/", shell=True)
+        try:
+            os.mkdir(os.path.join(os.getenv('HOME'), "vtklib"))
+        except:
+            pass
+        subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $HOME/vtklib/", shell=True)
         os.remove("vtk_python.tar.gz")
         subprocess.call(shlex.split("rm -r VTK-6.3.0-Linux-64bit"))
-        final_messages.append(("Downloaded and extracted VTK 6.3.0 to $VIRTUAL_ENV/lib/python2.7/site-packages/vtk\n"
-                               "... You'll need to link the libraries appropriately for your flavor."))
+        '''
+        final_messages.append(("Downloaded and extracted VTK 6.3.0 to {:s}/lib/python2.7/site-packages/vtk\n"
+                               "... You'll need to link the libraries appropriately for your flavor.").format(os.getenv('HOME')))
 
     elif "darwin" in platform.system().lower():
         urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Darwin-64bit.dmg",
