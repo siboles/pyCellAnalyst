@@ -47,7 +47,6 @@ if "windows" in platform.system().lower():
             dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
             tcldir = os.path.join(tcldir, fnmatch.filter(dirs, "tcl8.*")[0])
             activatepath = os.path.join(venv, "Scripts", "activate.bat")
-            print(tcldir, activatepath)
             subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}".format(tcldir, activatepath), shell=True)
 
 if not "windows" in platform.system().lower():
@@ -65,9 +64,10 @@ else:
                 __import__(modules[i])
                 continue
             except ImportError:
-                print("Downloading {:s}...".format(f))
-                urllib.urlretrieve(l, f)
+                pass
+
             if modules[i] == "matplotlib":
+                urllib.urlretrieve(l, f)
                 zfile = zipfile.ZipFile(f)
                 if venv is None:
                     sitedir = os.path.join(pythonstr, "Lib", "site-packages")
@@ -80,8 +80,7 @@ else:
                 #dependencies that this hacked method does not handle
                 subprocess.call("pip install python-dateutil pyparsing", shell=True)
             else:
-                subprocess.call("pip install {:s}".format(f), shell=True)
-                os.remove(f)
+                subprocess.call("pip install {:s}".format(l), shell=True)
 
     f = open("requirements.txt", "r")
     for l in f.readlines():
@@ -98,69 +97,54 @@ final_messages = []
 with open(os.path.join(os.path.join(here, os.path.pardir), "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
+#get module path from location of febio install
+#since this is my package, it will be easier to be sure this installs
+import febio
+module_path = os.path.abspath(os.path.join(os.path.dirname(febio.__file__), ".."))
+
 try:
     import vtk
     vers = vtk.VTK_VERSION
     if float(vers[0:3]) < 6.1:
         print "Outdated version of VTK detected. Downloading version 6.3.0..."
         if "windows" in platform.system().lower():
-            urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
-            subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
-            os.remove("VTK-6.2.0-cp27-none-win32.whl")
+            subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl", shell=True)
         elif "linux" in platform.system().lower():
-            urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
-                               "vtk_python.tar.gz")
-            subprocess.call(shlex.split("tar -zxf vtk_python.tar.gz"))
-            if os.getenv('VIRTUAL_ENV') is not None:
-                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk $VIRTUAL_ENV/lib/python2.7/site-packages", shell=True)
-                try:
-                    os.mkdir(os.path.join(os.getenv('HOME'), "vtklib"))
-                except:
-                    pass
-                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $HOME/vtklib/", shell=True)
-                final_messages.append(("Downloaded and extracted VTK 6.3.0 to {:s}/vtklib\n"
-                                       "... You'll need to link the libraries appropriately for your flavor.").format(os.getenv('HOME')))
+            subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/vtk-6.3.0-cp27-none-linux_x86_64.whl", shell=True)
+            if os.getenv('SHELL').lower() == "bash":
+                fid = open(os.path.join(os.getenv('HOME'), ".bashrc", "a"))
+                fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
+                fid.close()
+            elif os.getenv('SHELL').lower() == "zsh":
+                fid = open(os.path.join(os.getenv('HOME'), ".zshrc"), "a")
+                fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
+                fid.close()
             else:
-                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk /usr/local/lib/python2.7/dist-packages", shell=True)
-                try:
-                    os.mkdir(os.path.join(os.getenv('HOME'), "vtklib"))
-                except:
-                    pass
-                subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/lib* $HOME/vtklib/", shell=True)
-                final_messages.append(("Downloaded and extracted VTK 6.3.0 to {:s}/lib\n"
-                                       "... You'll need to link the libraries appropriately for your flavor.").format(os.getenv('HOME')))
-            os.remove("vtk_python.tar.gz")
-            subprocess.call(shlex.split("rm -r VTK-6.3.0-Linux-64bit"))
+                final_messages.append(("Sorry, your shell type is not supported. Please link the libraries for VTK yourself.\n"
+                                       "They were installed in {:s}".format(os.path.join(module_path,"vtk", "lib"))))
 
         elif "darwin" in platform.system().lower():
             urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Darwin-64bit.dmg",
                                "vtk_python.dmg")
             final_messages.append("Downloaded a disk image for VTK. Install following instructions for .dmg on Mac...")
 except ImportError:
-    print("No version of VTK was detected. Downloading version 6.3.0...")
     if "windows" in platform.system().lower():
-        urllib.urlretrieve("https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl","VTK-6.2.0-cp27-none-win32.whl")
-        subprocess.call("pip install VTK-6.2.0-cp27-none-win32.whl", shell=True)
-        os.remove("VTK-6.2.0-cp27-none-win32.whl")
+        subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl", shell=True)
     elif "linux" in platform.system().lower():
-        
-        subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/vtk-6.3.0-cp27-none-linux_x86_64.whl")
-        '''
-        urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Linux-64bit.tar.gz",
-        "vtk_python.tar.gz")
-
-        subprocess.call(shlex.split("tar -zxf vtk_python.tar.gz"))
-        subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/python2.7/site-packages/vtk $VIRTUAL_ENV/lib/python2.7/site-packages", shell=True)
-        try:
-            os.mkdir(os.path.join(os.getenv('HOME'), "vtklib"))
-        except:
-            pass
-        subprocess.call("mv VTK-6.3.0-Linux-64bit/lib/* $HOME/vtklib/", shell=True)
-        os.remove("vtk_python.tar.gz")
-        subprocess.call(shlex.split("rm -r VTK-6.3.0-Linux-64bit"))
-        '''
-        final_messages.append(("Downloaded and extracted VTK 6.3.0 to {:s}/lib/python2.7/site-packages/vtk\n"
-                               "... You'll need to link the libraries appropriately for your flavor.").format(os.getenv('HOME')))
+        subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/vtk-6.3.0-cp27-none-linux_x86_64.whl", shell=True)
+        if "bash" in os.getenv('SHELL').lower():
+            fid = open(os.path.join(os.getenv('HOME'), ".bashrc"), "a")
+            fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
+            fid.close()
+            subprocess.call("source {:s}".format(os.path.join(os.getenv('HOME'), ".bashrc")), shell=True)
+        elif "zsh" in os.getenv('SHELL').lower():
+            fid = open(os.path.join(os.getenv('HOME'), ".zshrc"), "a")
+            fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
+            fid.close()
+            subprocess.call("source {:s}".format(os.path.join(os.getenv('HOME'), ".zshrc")), shell=True)
+        else:
+            final_messages.append(("Sorry, your shell type is not supported. Please link the libraries for VTK yourself.\n"
+                                   "They were installed in {:s}".format(os.path.join(module_path,"vtk", "lib"))))
 
     elif "darwin" in platform.system().lower():
         urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Darwin-64bit.dmg",
