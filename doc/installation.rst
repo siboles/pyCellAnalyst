@@ -115,15 +115,3 @@ Again it is recommended that you are in a Python virtual environment when you do
         python setup.py install
 
      You will be prompted once by the installer to confirm whether to proceed. If you enter *y*, installation will proceed; *n* will abort.
-
-Extra Tasks on Linux and Mac
-----------------------------
-
-On Linux the libraries for VTK need to be linked. The method for doing this varies with distribution. On Ubuntu 14.04 and later, this is done by creating a file *vtk.conf*  in the folder */etc/ld.so.conf.d* and putting the path to where the VTK libraries are located as text in this file. This path is written to the screen after the installation script has finished. Once *vtk.conf* is created and the path saved within, execute the following command:
-
-.. code-block:: guess
-
-   sudo ldconfig
-
-On Mac, a .dmg file was downloaded to the *src* folder where *setup.py* is located. Install this.
-

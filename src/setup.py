@@ -111,18 +111,6 @@ try:
             subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl", shell=True)
         elif "linux" in platform.system().lower():
             subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/vtk-6.3.0-cp27-none-linux_x86_64.whl", shell=True)
-            if os.getenv('SHELL').lower() == "bash":
-                fid = open(os.path.join(os.getenv('HOME'), ".bashrc", "a"))
-                fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
-                fid.close()
-            elif os.getenv('SHELL').lower() == "zsh":
-                fid = open(os.path.join(os.getenv('HOME'), ".zshrc"), "a")
-                fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
-                fid.close()
-            else:
-                final_messages.append(("Sorry, your shell type is not supported. Please link the libraries for VTK yourself.\n"
-                                       "They were installed in {:s}".format(os.path.join(module_path,"vtk", "lib"))))
-
         elif "darwin" in platform.system().lower():
             urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Darwin-64bit.dmg",
                                "vtk_python.dmg")
@@ -132,20 +120,6 @@ except ImportError:
         subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/VTK-6.2.0-cp27-none-win32.whl", shell=True)
     elif "linux" in platform.system().lower():
         subprocess.call("pip install https://github.com/siboles/pyCellAnalyst/raw/master/cached_binaries/vtk-6.3.0-cp27-none-linux_x86_64.whl", shell=True)
-        if "bash" in os.getenv('SHELL').lower():
-            fid = open(os.path.join(os.getenv('HOME'), ".bashrc"), "a")
-            fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
-            fid.close()
-            subprocess.call("source {:s}".format(os.path.join(os.getenv('HOME'), ".bashrc")), shell=True)
-        elif "zsh" in os.getenv('SHELL').lower():
-            fid = open(os.path.join(os.getenv('HOME'), ".zshrc"), "a")
-            fid.write("export LD_LIBRARY_PATH={:s}:$LD_LIBRARY_PATH".format(os.path.join(module_path,"vtk", "lib")))
-            fid.close()
-            subprocess.call("source {:s}".format(os.path.join(os.getenv('HOME'), ".zshrc")), shell=True)
-        else:
-            final_messages.append(("Sorry, your shell type is not supported. Please link the libraries for VTK yourself.\n"
-                                   "They were installed in {:s}".format(os.path.join(module_path,"vtk", "lib"))))
-
     elif "darwin" in platform.system().lower():
         urllib.urlretrieve("http://www.vtk.org/files/release/6.3/vtkpython-6.3.0-Darwin-64bit.dmg",
                            "vtk_python.dmg")
