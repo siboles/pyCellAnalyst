@@ -1,9 +1,9 @@
 --allow-all-external
 --allow-unverified vtk
 --allow-unverified SimpleITK
-index-url https://pypi.python.org/simple/
---find-links=https://webdisk.ucalgary.ca/~ssibole/public_html/
-
+--index-url=https://webdisk.ucalgary.ca/~ssibole/public_html/
+--extra-index-url https://pypi.python.org/simple/
+--use-wheel
 numpy
 scipy
 MeshPy
