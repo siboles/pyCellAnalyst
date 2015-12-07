@@ -23,11 +23,10 @@ if "windows" in platform.system().lower():
             tcldir = os.path.join(pythonpath, "tcl")
             dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
             tcldir = os.path.join(tcldir, fnmatch.filter(dirs, "tcl8.*")[0])
-            print(tcldir)
             subprocess.call("echo set TCL_LIBRARY={:s} >> {:s}".format(tcldir,
                                                                        os.path.join(os.getenv("VIRTUAL_ENV"),
                                                                                     "Scripts",
-                                                                                    "activate.bat")))
+                                                                                    "activate.bat")), shell=True)
 else:
     subprocess.call(["pip", "install", "-r", os.path.join(here,"requirements.txt")])
 setup(
