@@ -18,7 +18,8 @@ if "windows" in platform.system().lower():
     subprocess.call(["pip", "install", "-r", os.path.join(here,"requirements_win.txt")])
     if os.getenv("VIRTUAL_ENV") is not None:
         if os.getenv("TCL_LIBRARY") is None:
-            pythonpath = min(fnmatch.filter(os.getenv("PATH").lower(), "*python2*"), key=len)
+            path = os.getenv("PATH").lower().split(";")
+            pythonpath = min(fnmatch.filter(path, "*python2*"), key=len)
             tcldir = os.path.join(pythonpath, "tcl")
             dirs = [name for name in os.listdir(tcldir) if os.path.isdir(os.path.join(tcldir, name))]
             tcldir = os.path.join(tcldir, fnmatch.filter(dirs, "tcl8.*")[0])
