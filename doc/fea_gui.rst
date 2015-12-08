@@ -8,7 +8,7 @@ Finite Element Analysis Graphical User Interface
 Pre-requisites
 --------------
 
-This graphical user intereface (GUI) uses the FEBio finite element solver, which can be downloaded `here <www.febio.org>`_. FEBio is aimed at solving problems in biomechanics, which often have both geometric and material non-linearity as well as anisotropy and multiple physical phases. This and the fact that FEBio is open-source make it an excellent solver for finite element analysis of the cells.
+This graphical user intereface (GUI) uses the FEBio finite element solver, which can be downloaded `here <http://www.febio.org>`_. FEBio is aimed at solving problems in biomechanics, which often have both geometric and material non-linearity as well as anisotropy and multiple physical phases. This and the fact that FEBio is open-source make it an excellent solver for finite element analysis of the cells.
 
 After running the install wizard, it may be advantage to add the FEBio binary (.exe in Windows, .lnx64 (arbitrary) in Linux) to your system path. This is not necessary for this utility though.
 
@@ -18,6 +18,7 @@ Peforming and Analysis
 Start the GUI, by opening a command terminal and typing:
 
 .. code-block:: guess
+
    python -m pyCellAnalyst.FEA_GUI
 
 Running for the First Time
@@ -53,7 +54,11 @@ The GUI will automatically generate plots of the results for each analysis and w
 Assigning Material Properties
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The second tab in the GUI, *Material Model*, provides options to define the material properties of the cells.
+The second tab in the GUI, *Material Model*, provides options to define the material properties of the cells. The simplest model would be an isotropic ground substance such as a neo-Hookean or Mooney-Rivlin material with no tensile network.
+
+To attempt to model the cytoskeleton, a transversely-isotropic ground substance can be selected to represent the microtubules. The symmetry axes for this material are oriented perpendicular to the local iso-distance contours measured from the cell surface.
+
+To model the actin filaments, *Tensile Fibres* can be added. The contribution of these is modelled as a probability density function in spherical space. **ksi1** is the axis of an ellipsoid oriented tangent to the local iso-distance contour, and can be thought of as the fibre stiffness in that direction. **ksi2** and **ksi3** are the other ellipsoidal axes and are forced to be equal. Likewise, the parameters **beta1**, **beta2**, and **beta3**, also represent the ellipsoidal axes of a probability density function, but these govern the non-linearity of the fibre stiffnesses. Since a derivative is taken, values of 2 for **beta** represent linear stiffness behaviour, and also the lower bound allowed for the value.
 
 
 
