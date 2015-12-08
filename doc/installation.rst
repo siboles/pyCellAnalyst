@@ -12,11 +12,11 @@ pyCellAnalyst requires a `Python <https://www.python.org/downloads/>`_ environme
 
 .. note::
 
-   You must install the 2.* version not the 3.* version. It is recommended to install a 64-bit version, since the memory limitation of 32-bit has been an issue for some datasets. It is also recommended to install the standard Python not a pre-packaged distribution such as Enthought or Anaconda. These distributions come with older versions of VTK and SimpleITK and will likely causes errors.
+   You must install the 2.x version not the 3.x version. It is recommended to install a 64-bit version, since the memory limitation of 32-bit has been an issue for some datasets. It is also recommended to install the standard Python not a pre-packaged distribution such as Enthought or Anaconda. These distributions come with older versions of VTK and SimpleITK and will likely causes errors.
 
 .. note::
 
-   If you are on Linux, you likely already have a Python installation. Most distributions ship with Python but some, such as Arch Linux, don't. Please consult the documentation for your particular distibution to see how to install. Remember a Python version 2.*.
+   If you are on Linux, you likely already have a Python installation. Most distributions ship with Python but some, such as Arch Linux, don't. Please consult the documentation for your particular distibution to see how to install. Remember a Python version 2.x **not** version 3.x is required.
 
 It is highly recommended to install pyCellAnalyst into a virtual environment. This ensures that all the dependencies pyCellAnalyst requires are satisfied with the exact version used in development. Also, there is no danger of harming the system level Python. This is especially important in Linux, since most distributions depend on Python heavily. Finally, this gives the freedom to use pre-built packages such as Anaconda or Enthought for normal usage, while easily switching to the pyCellAnalyst specific environment when it is needed.
 

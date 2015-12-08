@@ -1,2 +1,2 @@
-pip install virtualenv virtualenvwrapper-win
-mkvirtualenv pyCellAnalyst
+start pip install virtualenv virtualenvwrapper-win
+start mkvirtualenv pyCellAnalyst

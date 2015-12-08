@@ -1,8 +1,3 @@
-
-# Change this to point to your FEBio executable
-FEBIO_BIN = "/home/scott/febio-2.3.1/bin/febio2.lnx64"
-
-# DO NOT EDIT BELOW HERE
 import febio
 import pickle
 import string
@@ -37,6 +32,19 @@ class Application(Frame):
         Frame.__init__(self, master)
         self.lastdir = os.getcwd()
         self.op_sys = platform.platform()
+
+        #Check for path to FEBio executable
+        try:
+            fid = open(os.path.join(os.getenv("HOME"), ".pyCellAnalystFEA.pth"), "r")
+            self._FEBIO_BIN = os.path.abspath(fid.readline())
+            fid.close()
+            try:
+                p = subprocess.Popen(self._FEBIO_BIN)
+                p.terminate()
+            except:
+                self.getFEBioLocation("File indicated as the FEBio executable is incorrect. Please reselect.")
+        except:
+            self.getFEBioLocation("Please select the FEBio executable file.")
 
         self.notebook = Notebook(self)
         self.tab1 = Frame(self.notebook)
@@ -147,6 +155,23 @@ class Application(Frame):
         self.grid()
         self.createWidgetsTab1()
         self.createWidgetsTab2()
+
+    def getFEBioLocation(self, msg):
+        filename = tkFileDialog.askopenfilename(
+            parent=root, initialdir=os.getenv("HOME"),
+            title=msg)
+        if filename:
+            try:
+                p = subprocess.Popen(filename)
+                p.terminate()
+                self._FEBIO_BIN = filename
+                fid = open(os.path.join(os.getenv("HOME"), ".pyCellAnalystFEA.pth"), "wt")
+                fid.write(self._FEBIO_BIN)
+                fid.close()
+            except:
+                self.getFEBioLocation("Incorrect FEBio executable file was selected. Please reselect.")
+        else:
+            raise SystemExit("You must indicate the location of the FEBio executable. Exiting...")
 
     def createWidgetsTab1(self):
         #pickles to load
@@ -506,7 +531,7 @@ class Application(Frame):
             model.addLoadCurve(lc='1', lctype='linear', points=[0, 0, 1, 1])
             model.writeModel()
 
-            subprocess.call(FEBIO_BIN + " -i " + modelname, shell=True)
+            subprocess.call(self._FEBIO_BIN + " -i " + modelname, shell=True)
 
     def analyzeResults(self):
         self.matched = [] # for paired comparisons
