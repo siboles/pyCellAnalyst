@@ -12,13 +12,18 @@ pyCellAnalyst requires a `Python <https://www.python.org/downloads/>`_ environme
 
 .. note::
 
-   You must install the 2.* version not the 3.* version. On Windows, it is also highly recommended to install the 32-bit (x86) version. It is also recommended to install the standard Python not a pre-packaged distribution such as Enthought or Anaconda. These distributions come with older versions of VTK and SimpleITK and will likely causes errors.
+   You must install the 2.* version not the 3.* version. It is recommended to install a 64-bit version, since the memory limitation of 32-bit has been an issue for some datasets. It is also recommended to install the standard Python not a pre-packaged distribution such as Enthought or Anaconda. These distributions come with older versions of VTK and SimpleITK and will likely causes errors.
 
-If you are on Linux, you likely already have a Python installation. Very few distributions do not ship with Python.
+.. note::
+
+   If you are on Linux, you likely already have a Python installation. Most distributions ship with Python but some, such as Arch Linux, don't. Please consult the documentation for your particular distibution to see how to install. Remember a Python version 2.*.
+
+It is highly recommended to install pyCellAnalyst into a virtual environment. This ensures that all the dependencies pyCellAnalyst requires are satisfied with the exact version used in development. Also, there is no danger of harming the system level Python. This is especially important in Linux, since most distributions depend on Python heavily. Finally, this gives the freedom to use pre-built packages such as Anaconda or Enthought for normal usage, while easily switching to the pyCellAnalyst specific environment when it is needed.
+
+However, if you wish to install to your default Python directory you can skip to **Step 4** of `Installing the Module and Dependencies`_.
 
 Creating a Python Virtual Environment
 -------------------------------------
-It is highly recommended to install pyCellAnalyst into a virtual environment. This ensures that all the dependencies pyCellAnalyst requires are satisfied with the exact version used in development. Also, there is no danger of harming the system level Python. This is especially important in Linux, since most distributions depend on Python heavily. Finally, this gives the freedom to use pre-built packages such as Anaconda or Enthought for normal usage, while easily switching to the pyCellAnalyst specific environment when it is needed.
 
 .. note::
 
@@ -62,7 +67,7 @@ In Linux or Mac do the following:
 .. note::
 
    The *sudo* in the above command temporarily elevates you to root (administrator). It will prompt you for a password, which will be the same as your login password. If you do not have the ability to use *sudo*, you will need to talk to your IT administrator(s) to do the above step.
-3. Type the following in the command terminal and press enter:
+3. Type the following in the command terminal and press enter (or .bash_profile, .zprofile, etc.):
 
    .. code-block:: guess
 
@@ -114,4 +119,3 @@ Again it is recommended that you are in a Python virtual environment when you do
 
         python setup.py install
 
-     You will be prompted once by the installer to confirm whether to proceed. If you enter *y*, installation will proceed; *n* will abort.
