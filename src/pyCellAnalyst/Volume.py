@@ -288,6 +288,7 @@ class Volume(object):
         self._img = sitk.Cast(sitk.RescaleIntensity(self._img, 0, 255),
                               sitk.sitkUInt8)
 
+
         self._imgType = self._img.GetPixelIDValue()
         if self._imgType == 1:
             self._imgTypeMax = 255
@@ -367,6 +368,7 @@ class Volume(object):
                 except:
                     raise SystemExit("{:s} is not a parameter of {:s}"
                                      .format(p, self.smoothing_method))
+            img = sitk.Cast(img, sitk.sitkUInt8)
             img = sitk.Bilateral(
                 img,
                 domainSigma=parameters['domainSigma'],
@@ -400,6 +402,11 @@ class Volume(object):
             smooth.SetPatchRadius(parameters['radius'])
             smooth.SetNumberOfIterations(parameters['iterations'])
             img = smooth.Execute(img)
+            smooth = sitk.GradientAnisotropicDiffusionImageFilter()
+            smooth.SetTimeStep(0.01)
+            smooth.SetNumberOfIterations(5)
+            smooth.SetConductanceParameter(9.0)
+            img = smooth.Execute(img)
 
         else:
             raise SystemExit(("ERROR: {:s} is not a supported "
@@ -415,6 +422,8 @@ class Volume(object):
         #enhance the edges
         if self.enhance_edge:
             img = sitk.LaplacianSharpening(img)
+        if self._stain == "Background":
+            img = sitk.InvertIntensity(img)
         return sitk.Cast(img, sitk.sitkFloat32)
 
     def _getMinMax(self, img):
@@ -511,25 +520,13 @@ class Volume(object):
 
             if method == 'Percentage':
                 t = self._getMinMax(simg)[1]
-                if self._stain == 'Foreground':
-                    if self.two_dim:
-                        seg, thigh, tlow, tlist = self.threshold2D(
-                            simg, 'PFore', ratio)
-                    else:
-                        t *= ratio
-                        seg = sitk.BinaryThreshold(simg, t, 1e7)
-                elif self._stain == 'Background':
-                    if self.two_dim:
-                        seg, thigh, tlow, tlist = self.threshold2D(
-                            simg, 'PBack', ratio)
-                    else:
-                        t *= (1.0 - ratio)
-                        seg = sitk.BinaryThreshold(simg, 0, t)
+
+                if self.two_dim:
+                    seg, thigh, tlow, tlist = self.threshold2D(simg, "Percentage", ratio)
                 else:
-                    raise SystemExit(("Unrecognized value for 'stain', {:s}. "
-                                      "Options are 'Foreground' or "
-                                      "'Background'"
-                                      .format(self._stain)))
+                    t *= ratio
+                    seg = sitk.BinaryThreshold(simg, t, 1e7)
+
                 if self.two_dim:
                     print(("... Threshold using {:s} method ranged: "
                            "{:d}-{:d}".format(method, int(tlow), int(thigh))))
@@ -574,15 +571,11 @@ class Volume(object):
 
             if not(method == 'Percentage'):
                 thres.SetNumberOfHistogramBins((self._imgTypeMax + 1) / 2)
-                if self._stain == 'Foreground':
-                    thres.SetInsideValue(0)
-                    thres.SetOutsideValue(1)
-                elif self._stain == 'Background':
-                    thres.SetInsideValue(1)
-                    thres.SetOutsideValue(0)
+                thres.SetInsideValue(0)
+                thres.SetOutsideValue(1)
+
                 if self.two_dim:
-                    seg, thigh, tlow, tlist = self.threshold2D(
-                        simg, thres, ratio)
+                    seg, thigh, tlow, tlist = self.threshold2D(simg, thres, ratio)
                     print(("... Thresholds determined by {:s} method ranged: "
                            "[{:d}-{:d}".format(method, int(tlow), int(thigh))))
                 else:
@@ -633,12 +626,8 @@ class Volume(object):
                                              label_bounds[0])) or \
                        np.any(np.intersect1d(region_bnds[1],
                                              label_bounds[1])):
-                        if self._stain == 'Foreground':
-                            newt += 0.01 * t
-                            seg = sitk.BinaryThreshold(simg, int(newt), 1e7)
-                        elif self._stain == 'Background':
-                            newt -= 0.01 * t
-                            seg = sitk.BinaryThreshold(simg, 0, int(newt))
+                        newt += 0.01 * t
+                        seg = sitk.BinaryThreshold(simg, int(newt), 1e7)
                     else:
                         break
 
@@ -1139,7 +1128,7 @@ class Volume(object):
                           0, self._img.GetSize()[1],
                           0, self._img.GetSize()[2]]
                 iso = vtk.vtkImageMarchingCubes()
-                iso.ComputeNormalsOn()
+                iso.ComputeNormalsOff()
             else:
                 roi = sitk.RegionOfInterest(self.cells == (i + 1),
                                             c[3:5], c[0:2])
@@ -1192,14 +1181,21 @@ class Volume(object):
             if self._img.GetDimension() == 3:
                 smooth = vtk.vtkWindowedSincPolyDataFilter()
                 smooth.SetInputConnection(triangles.GetOutputPort())
-                if self.active == "EdgeFree":
-                    smooth.SetNumberOfIterations(200)
-                    smooth.Update()
-                    self.surfaces.append(smooth.GetOutput())
-                else:
-                    smooth.SetNumberOfIterations(100)
-                    smooth.Update()
-                    self.surfaces.append(smooth.GetOutput())
+                smooth.NormalizeCoordinatesOn()
+                smooth.SetNumberOfIterations(30)
+                smooth.SetPassBand(0.001)
+                smooth.Update()
+                deci = vtk.vtkQuadricClustering()
+                deci.SetInputData(smooth.GetOutput())
+                deci.Update()
+
+                smooth2 = vtk.vtkWindowedSincPolyDataFilter()
+                smooth2.NormalizeCoordinatesOn()
+                smooth2.SetNumberOfIterations(10)
+                smooth2.SetPassBand(0.1)
+                smooth2.SetInputData(deci.GetOutput())
+                smooth2.Update()
+                self.surfaces.append(smooth2.GetOutput())
                 filename = 'cell{:02d}.stl'.format(i + 1)
                 stl.SetFileName(
                     str(os.path.normpath(self._output_dir +
@@ -1400,7 +1396,7 @@ class Volume(object):
         stack = []
         values = []
         size = img.GetSize()
-        if (thres != "PFore" and thres != "PBack"):
+        if (thres != "Percentage"):
             for sl in xrange(size[2]):
                 s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
                 seg = thres.Execute(s)
@@ -1410,18 +1406,11 @@ class Volume(object):
             for sl in xrange(size[2]):
                 s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
                 t = self._getMinMax(s)[1]
-                if thres == "PFore":
-                    t *= ratio
-                    seg = sitk.BinaryThreshold(s, t, 1e7)
-                    stack.append(sitk.BinaryFillhole(seg != 0))
-                    values.append(t)
-                else:
-                    t *= (1.0 - ratio)
-                    seg = sitk.BinaryThreshold(s, 0, t)
-                    if self.fillholes:
-                        stack.append(sitk.BinaryFillhole(seg != 0))
-                    values.append(t)
-
+                t *= ratio
+                seg = sitk.BinaryThreshold(s, t, 1e7)
+                stack.append(sitk.BinaryFillhole(seg != 0))
+                values.append(t)
+ 
         seg = sitk.JoinSeries(stack)
         seg.SetOrigin(img.GetOrigin())
         seg.SetSpacing(img.GetSpacing())
