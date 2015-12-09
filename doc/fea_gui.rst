@@ -12,8 +12,8 @@ This graphical user intereface (GUI) uses the FEBio finite element solver, which
 
 After running the install wizard, it may be advantage to add the FEBio binary (.exe in Windows, .lnx64 (arbitrary) in Linux) to your system path. This is not necessary for this utility though.
 
-Peforming and Analysis
-----------------------
+Peforming an Analysis
+---------------------
 
 Start the GUI, by opening a command terminal and typing:
 

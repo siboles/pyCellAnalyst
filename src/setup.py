@@ -15,6 +15,7 @@ class BinaryDistribution(Distribution):
     def is_pure(self):
         return False
 if "windows" in platform.system().lower():
+    subprocess.call(["pip", "install", "numpy", "--index-url", "https://webdisk.ucalgary.ca/~ssibole/public_html/"])
     subprocess.call(["pip", "install", "-r", os.path.join(here,"requirements_win.txt")])
     if os.getenv("VIRTUAL_ENV") is not None:
         if os.getenv("TCL_LIBRARY") is None:
