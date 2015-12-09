@@ -35,7 +35,11 @@ class Application(Frame):
 
         #Check for path to FEBio executable
         try:
-            fid = open(os.path.join(os.getenv("HOME"), ".pyCellAnalystFEA.pth"), "r")
+            if "windows" in self.op_sys.lower():
+                home = os.getenv("HOMEPATH")
+            else:
+                home = os.getenv("HOME")
+            fid = open(os.path.join(home, ".pyCellAnalystFEA.pth"), "r")
             self._FEBIO_BIN = os.path.abspath(fid.readline())
             fid.close()
             try:
