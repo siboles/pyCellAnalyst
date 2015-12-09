@@ -46,9 +46,9 @@ class Application(Frame):
                 p = subprocess.Popen(self._FEBIO_BIN)
                 p.terminate()
             except:
-                self.getFEBioLocation("File indicated as the FEBio executable is incorrect. Please reselect.")
+                self.getFEBioLocation("File indicated as the FEBio executable is incorrect. Please reselect.", home)
         except:
-            self.getFEBioLocation("Please select the FEBio executable file.")
+            self.getFEBioLocation("Please select the FEBio executable file.", home)
 
         self.notebook = Notebook(self)
         self.tab1 = Frame(self.notebook)
@@ -160,20 +160,20 @@ class Application(Frame):
         self.createWidgetsTab1()
         self.createWidgetsTab2()
 
-    def getFEBioLocation(self, msg):
+    def getFEBioLocation(self, msg, home):
         filename = tkFileDialog.askopenfilename(
-            parent=root, initialdir=os.getenv("HOME"),
+            parent=root, initialdir=home,
             title=msg)
         if filename:
             try:
                 p = subprocess.Popen(filename)
                 p.terminate()
                 self._FEBIO_BIN = filename
-                fid = open(os.path.join(os.getenv("HOME"), ".pyCellAnalystFEA.pth"), "wt")
+                fid = open(os.path.join(home, ".pyCellAnalystFEA.pth"), "wt")
                 fid.write(self._FEBIO_BIN)
                 fid.close()
             except:
-                self.getFEBioLocation("Incorrect FEBio executable file was selected. Please reselect.")
+                self.getFEBioLocation("Incorrect FEBio executable file was selected. Please reselect.", home)
         else:
             raise SystemExit("You must indicate the location of the FEBio executable. Exiting...")
 
