@@ -1150,7 +1150,16 @@ class Volume(object):
                 a.SetArray(n)
                 a.Update()
 
-                iso.SetInputData(a.GetOutput())
+                voi = vtk.vtkExtractVOI()
+                voi.SetInputData(a.GetOutput())
+                voi.SetVOI(c[0], c[0]+c[3],
+                           c[1], c[1]+c[4],
+                           c[2], c[2]+c[5])
+                voi.SetSampleRate(1, 1, 1)
+                voi.IncludeBoundaryOn()
+                voi.Update()
+
+                iso.SetInputData(voi.GetOutput())
                 iso.SetValue(0, self.thresholds[i])
                 iso.Update()
 
@@ -1166,6 +1175,14 @@ class Volume(object):
                 n = sitk.GetArrayFromImage(lvl_label)
                 a.SetArray(n)
                 a.Update()
+                voi = vtk.vtkExtractVOI()
+                voi.SetInputData(a.GetOutput())
+                voi.SetVOI(c[0], c[0]+c[3],
+                           c[1], c[1]+c[4],
+                           c[2], c[2]+c[5])
+                voi.SetSampleRate(1, 1, 1)
+                voi.IncludeBoundaryOn()
+                voi.Update()
 
                 iso.SetInputData(a.GetOutput())
                 if self.active == "Geodesic":
