@@ -1201,19 +1201,23 @@ class Volume(object):
                 smooth.NormalizeCoordinatesOn()
                 smooth.SetNumberOfIterations(100)
                 smooth.SetPassBand(0.001)
+                smooth.SetFeatureAngle(120.0)
                 smooth.NonManifoldSmoothingOn()
                 smooth.Update()
 
                 deci = vtk.vtkQuadricClustering()
-                deci.SetNumberOfDivisions(20, 20, 20)
                 deci.SetInputData(smooth.GetOutput())
+                deci.SetNumberOfDivisions(20,20,20)
                 deci.Update()
+
                 smooth2 = vtk.vtkWindowedSincPolyDataFilter()
                 smooth2.SetInputData(deci.GetOutput())
                 smooth2.NormalizeCoordinatesOn()
-                smooth2.SetPassBand(0.1)
                 smooth2.NonManifoldSmoothingOn()
+                smooth2.SetPassBand(0.1)
+                smooth2.SetFeatureAngle(120.0)
                 smooth2.Update()
+
                 self.surfaces.append(smooth2.GetOutput())
                 filename = 'cell{:02d}.stl'.format(i + 1)
                 stl.SetFileName(

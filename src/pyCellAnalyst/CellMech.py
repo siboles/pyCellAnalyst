@@ -479,7 +479,7 @@ class CellMech(object):
         # Y - do not edit surface mesh
         # O - perform mesh optimization
         #     optlevel=9
-        mesh = build(s, options=Options("pq1.2O",
+        mesh = build(s, options=Options("pqO",
                                         optlevel=9))
         elements = list(mesh.elements)
         nodes = list(mesh.points)
@@ -506,6 +506,59 @@ class CellMech(object):
         tet.SetCells(e.size / 5, arr)
 
         vtkMesh.SetCells(10, tet)
+
+        #Do another pass of meshing
+        tri = vtk.vtkGeometryFilter()
+        tri.SetInputData(vtkMesh)
+        tri.Update()
+
+        deci = vtk.vtkDecimatePro()
+        deci.SetTargetReduction(0.3)
+        deci.SetInputData(tri.GetOutput())
+        deci.Update()
+
+        smooth = vtk.vtkWindowedSincPolyDataFilter()
+        smooth.SetNumberOfIterations(50)
+        smooth.SetPassBand(0.001)
+        smooth.SetInputData(deci.GetOutput())
+        smooth.Update()
+
+        stl = vtk.vtkSTLWriter()
+        stl.SetFileName("tmp.stl")
+        stl.SetInputData(smooth.GetOutput())
+        stl.Write()
+
+        s = MeshInfo()
+        s.load_stl("tmp.stl")
+
+        mesh = build(s, options=Options("pqYO",
+                                        optlevel=9))
+        elements = list(mesh.elements)
+        nodes = list(mesh.points)
+        faces = np.array(mesh.faces)
+        s_nodes = list(np.unique(np.ravel(faces)))
+
+        ntmp = np.array(nodes, np.float64)
+        arr = numpy_to_vtk(ntmp.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
+        arr.SetNumberOfComponents(3)
+        tetraPoints = vtk.vtkPoints()
+        tetraPoints.SetData(arr)
+
+        vtkMesh = vtk.vtkUnstructuredGrid()
+        vtkMesh.Allocate(len(elements), len(elements))
+        vtkMesh.SetPoints(tetraPoints)
+
+        e = np.array(elements, np.uint32) - 1
+        e = np.hstack((np.ones((e.shape[0], 1), np.uint32) * 4, e))
+
+        arr = numpy_to_vtk(e.ravel(), deep=True,
+                           array_type=vtk.VTK_ID_TYPE)
+
+        tet = vtk.vtkCellArray()
+        tet.SetCells(e.size / 5, arr)
+
+        vtkMesh.SetCells(10, tet)
+
 
         n1 = ntmp[e[:, 1], :]
         n2 = ntmp[e[:, 2], :]
