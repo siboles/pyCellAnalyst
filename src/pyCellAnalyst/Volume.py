@@ -1152,9 +1152,9 @@ class Volume(object):
 
                 voi = vtk.vtkExtractVOI()
                 voi.SetInputData(a.GetOutput())
-                voi.SetVOI(c[0], c[0]+c[3],
-                           c[1], c[1]+c[4],
-                           c[2], c[2]+c[5])
+                voi.SetVOI(c[0] - 1, c[0]+c[3] + 1,
+                           c[1] - 1, c[1]+c[4] + 1,
+                           c[2] - 1, c[2]+c[5] + 1)
                 voi.SetSampleRate(1, 1, 1)
                 voi.IncludeBoundaryOn()
                 voi.Update()
@@ -1177,9 +1177,9 @@ class Volume(object):
                 a.Update()
                 voi = vtk.vtkExtractVOI()
                 voi.SetInputData(a.GetOutput())
-                voi.SetVOI(c[0], c[0]+c[3],
-                           c[1], c[1]+c[4],
-                           c[2], c[2]+c[5])
+                voi.SetVOI(c[0] - 1, c[0]+c[3] + 1,
+                           c[1] - 1, c[1]+c[4] + 1,
+                           c[2] - 1, c[2]+c[5] + 1)
                 voi.SetSampleRate(1, 1, 1)
                 voi.IncludeBoundaryOn()
                 voi.Update()
@@ -1199,18 +1199,20 @@ class Volume(object):
                 smooth = vtk.vtkWindowedSincPolyDataFilter()
                 smooth.SetInputConnection(triangles.GetOutputPort())
                 smooth.NormalizeCoordinatesOn()
-                smooth.SetNumberOfIterations(30)
+                smooth.SetNumberOfIterations(100)
                 smooth.SetPassBand(0.001)
+                smooth.NonManifoldSmoothingOn()
                 smooth.Update()
+
                 deci = vtk.vtkQuadricClustering()
+                deci.SetNumberOfDivisions(20, 20, 20)
                 deci.SetInputData(smooth.GetOutput())
                 deci.Update()
-
                 smooth2 = vtk.vtkWindowedSincPolyDataFilter()
-                smooth2.NormalizeCoordinatesOn()
-                smooth2.SetNumberOfIterations(10)
-                smooth2.SetPassBand(0.1)
                 smooth2.SetInputData(deci.GetOutput())
+                smooth2.NormalizeCoordinatesOn()
+                smooth2.SetPassBand(0.1)
+                smooth2.NonManifoldSmoothingOn()
                 smooth2.Update()
                 self.surfaces.append(smooth2.GetOutput())
                 filename = 'cell{:02d}.stl'.format(i + 1)

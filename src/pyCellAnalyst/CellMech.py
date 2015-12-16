@@ -479,7 +479,7 @@ class CellMech(object):
         # Y - do not edit surface mesh
         # O - perform mesh optimization
         #     optlevel=9
-        mesh = build(s, options=Options("pq1.2YO",
+        mesh = build(s, options=Options("pq1.2O",
                                         optlevel=9))
         elements = list(mesh.elements)
         nodes = list(mesh.points)
