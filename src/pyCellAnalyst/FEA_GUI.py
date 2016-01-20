@@ -666,7 +666,7 @@ class Application(Frame):
         output_dir = os.sep.join([top_dir, "FEA_analysis_" + ts])
         os.mkdir(output_dir)
         for output in self.histograms.keys():
-            if self.histograms[output]:
+            if self.histograms[output] and self.analysis["Generate Histograms"].get():
                 try:
                     os.mkdir(os.sep.join([output_dir, "histograms"]))
                 except:
@@ -700,7 +700,7 @@ class Application(Frame):
                     del fig
 
         for output in self.boxwhiskers.keys():
-            if self.boxwhiskers[output]:
+            if self.boxwhiskers[output] and self.analysis["Tukey Boxplots"].get():
                 try:
                     os.mkdir(os.sep.join([output_dir, "boxplots"]))
                 except:
@@ -739,11 +739,10 @@ class Application(Frame):
 
                         low_fliers = y[y < bottom]
                         high_fliers = y[y > top]
-                        a['fliers'][2 * i].set_ydata(low_fliers)
-                        a['fliers'][2 * i].set_xdata([i + 1] * low_fliers.size)
-                        a['fliers'][2 * i + 1].set_ydata(high_fliers)
-                        a['fliers'][2 * i + 1].set_xdata(
-                            [i + 1] * high_fliers.size)
+                        fliers = np.concatenate((low_fliers, high_fliers))
+                        a['fliers'][2 * i].set_ydata(fliers)
+                        a['fliers'][2 * i].set_xdata([i + 1] * fliers.size)
+
                     object_name = string.replace(
                         trunc_name[2], "cellFEA", "Cell ")
                     object_name = string.replace(object_name, ".pkl", "")
@@ -764,7 +763,7 @@ class Application(Frame):
                     del fig
 
         for output in self.differences.keys():
-            if self.differences[output]:
+            if self.differences[output] and self.analysis["Calculate Differences"].get():
                 try:
                     os.mkdir(os.sep.join([output_dir, "paired_differences"]))
                 except:
