@@ -169,9 +169,12 @@ class CellMech(object):
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
                 self.rsurfs.append(triangles.GetOutput())
+                massProps = vtk.vtkMassProperties()
+                massProps.SetInputData(self.rsurfs[-1])
+                massProps.Update()
                 self._make3Dmesh(
                     str(os.path.normpath(self._ref_dir + os.sep + fname)),
-                    'MATERIAL')
+                    'MATERIAL', massProps.GetVolume())
 
         for fname in sorted(os.listdir(self._def_dir)):
             if '.stl' in fname.lower():
@@ -183,9 +186,12 @@ class CellMech(object):
                 triangles.SetInputConnection(reader.GetOutputPort())
                 triangles.Update()
                 self.dsurfs.append(triangles.GetOutput())
+                massProps = vtk.vtkMassProperties()
+                massProps.SetInputData(self.dsurfs[-1])
+                massProps.Update()
                 self._make3Dmesh(
                     str(os.path.normpath(self._def_dir + os.sep + fname)),
-                    'SPATIAL')
+                    'SPATIAL', massProps.GetVolume())
 
     def _deform(self):
         r"""
@@ -440,7 +446,7 @@ class CellMech(object):
                       [E[4, 0], E[5, 0], E[2, 0]]], float)
         self.ecm_strain = E
 
-    def _make3Dmesh(self, filename, frame):
+    def _make3Dmesh(self, filename, frame, vConst):
         """
         Generates a 3-D tetrahedral mesh from a polygonal surface using TETGEN
         wrapped by MeshPy.
@@ -468,6 +474,8 @@ class CellMech(object):
             * dvols
             * daxes
         """
+        vConst /= 5000.0
+        edgeSize = (vConst*12/np.sqrt(2)) ** (1./3.)
         s = MeshInfo()
         s.load_stl(filename)
         #use TETGEN to generate mesh
@@ -479,60 +487,82 @@ class CellMech(object):
         # Y - do not edit surface mesh
         # O - perform mesh optimization
         #     optlevel=9
-        mesh = build(s, options=Options("pqO",
-                                        optlevel=9))
-        elements = list(mesh.elements)
-        nodes = list(mesh.points)
-        faces = np.array(mesh.faces)
-        s_nodes = list(np.unique(np.ravel(faces)))
+        #mesh = build(s, options=Options("pq",
+        #                                optlevel=9,
+        #                                minratio=1.5,
+        #))
+        #elements = list(mesh.elements)
+        #nodes = list(mesh.points)
+        #faces = np.array(mesh.faces)
+        #s_nodes = list(np.unique(np.ravel(faces)))
 
-        ntmp = np.array(nodes, np.float64)
-        arr = numpy_to_vtk(ntmp.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
-        arr.SetNumberOfComponents(3)
-        tetraPoints = vtk.vtkPoints()
-        tetraPoints.SetData(arr)
+        #ntmp = np.array(nodes, np.float64)
+        #arr = numpy_to_vtk(ntmp.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
+        #arr.SetNumberOfComponents(3)
+        #tetraPoints = vtk.vtkPoints()
+        #tetraPoints.SetData(arr)
 
-        vtkMesh = vtk.vtkUnstructuredGrid()
-        vtkMesh.Allocate(len(elements), len(elements))
-        vtkMesh.SetPoints(tetraPoints)
+        #vtkMesh = vtk.vtkUnstructuredGrid()
+        #vtkMesh.Allocate(len(elements), len(elements))
+        #vtkMesh.SetPoints(tetraPoints)
 
-        e = np.array(elements, np.uint32) - 1
-        e = np.hstack((np.ones((e.shape[0], 1), np.uint32) * 4, e))
+        #e = np.array(elements, np.uint32) - 1
+        #e = np.hstack((np.ones((e.shape[0], 1), np.uint32) * 4, e))
 
-        arr = numpy_to_vtk(e.ravel(), deep=True,
-                           array_type=vtk.VTK_ID_TYPE)
+        #arr = numpy_to_vtk(e.ravel(), deep=True,
+        #                   array_type=vtk.VTK_ID_TYPE)
 
-        tet = vtk.vtkCellArray()
-        tet.SetCells(e.size / 5, arr)
+        #tet = vtk.vtkCellArray()
+        #tet.SetCells(e.size / 5, arr)
 
-        vtkMesh.SetCells(10, tet)
+        #vtkMesh.SetCells(10, tet)
 
-        #Do another pass of meshing
-        tri = vtk.vtkGeometryFilter()
-        tri.SetInputData(vtkMesh)
-        tri.Update()
+        ##Do another pass of meshing
+        #tri = vtk.vtkGeometryFilter()
+        #tri.SetInputData(vtkMesh)
+        #tri.Update()
 
-        deci = vtk.vtkDecimatePro()
-        deci.SetTargetReduction(0.3)
-        deci.SetInputData(tri.GetOutput())
-        deci.Update()
+        #deci = vtk.vtkDecimatePro()
+        #deci.SetTargetReduction(0.1)
+        #deci.PreserveTopologyOff()
+        #deci.BoundaryVertexDeletionOn()
+        #deci.SplittingOn()
+        #deci.SetInputData(tri.GetOutput())
+        #deci.Update()
 
-        smooth = vtk.vtkWindowedSincPolyDataFilter()
-        smooth.SetNumberOfIterations(50)
-        smooth.SetPassBand(0.001)
-        smooth.SetInputData(deci.GetOutput())
-        smooth.Update()
+        #clean = vtk.vtkCleanPolyData()
+        #clean.SetTolerance(0.0)
+        #clean.SetInputData(deci.GetOutput())
+        #clean.Update()
 
-        stl = vtk.vtkSTLWriter()
-        stl.SetFileName("tmp.stl")
-        stl.SetInputData(smooth.GetOutput())
-        stl.Write()
+        #normals = vtk.vtkPolyDataNormals()
+        #normals.ConsistencyOn()
+        #normals.AutoOrientNormalsOn()
+        #normals.SetInputData(clean.GetOutput())
+        #normals.Update()
 
-        s = MeshInfo()
-        s.load_stl("tmp.stl")
+        #fill = vtk.vtkFillHolesFilter()
+        #fill.SetHoleSize(1e6)
+        #fill.SetInputData(normals.GetOutput())
+        #fill.Update()
 
-        mesh = build(s, options=Options("pqYO",
-                                        optlevel=9))
+        #smooth = vtk.vtkWindowedSincPolyDataFilter()
+        #smooth.SetNumberOfIterations(25)
+        #smooth.SetPassBand(0.01)
+        #smooth.SetInputData(deci.GetOutput())
+        #smooth.Update()
+
+        #stl = vtk.vtkSTLWriter()
+        #stl.SetFileName("tmp.stl")
+        #stl.SetInputData(smooth.GetOutput())
+        #stl.Write()
+
+        #s = MeshInfo()
+        #s.load_stl("tmp.stl")
+
+        mesh = build(s, options=Options("pq2.0/20Oa",
+                                        optlevel=10,
+                                        maxvolume=vConst, verbose=True), volume_constraints=True, max_volume=vConst)
         elements = list(mesh.elements)
         nodes = list(mesh.points)
         faces = np.array(mesh.faces)

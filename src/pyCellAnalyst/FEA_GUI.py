@@ -121,7 +121,8 @@ class Application(Frame):
                         "Maximum Compressive Stress": {},
                         "Maximum Tensile Stress": {},
                         "Maximum Shear Stress": {},
-                        "Pressure": {}}
+                        "Pressure": {},
+                        "Displacement": {}}
 
         self.histograms = {"Effective Strain (von Mises)": {},
                            "Maximum Compressive Strain": {},
@@ -515,7 +516,7 @@ class Application(Frame):
                 model.addGeometry(mesh=mesh, mats=mats)
 
             ctrl = febio.Control()
-            ctrl.setAttributes({'title': 'cell'})
+            ctrl.setAttributes({'title': 'cell', 'max_ups': '0'})
 
             model.addControl(ctrl, step=0)
 
@@ -553,6 +554,15 @@ class Application(Frame):
             mvolumes = np.zeros(len(self.data[f]['elements']), float)
             #spatial element volumes
             svolumes = np.copy(mvolumes)
+            nnodes = len(results.NodeData.keys())
+            displacement = np.zeros((nnodes, 3))
+            for j, n in enumerate(self.data[f]['nodes']):
+                tmp = results.NodeData[j + 1]['displacement'][-1, :]
+                displacement[j, :] = [tmp[0], tmp[1], tmp[2]]
+            pstress = []
+            pstressdir = []
+            pstrain = []
+            pstraindir = []
             for j, e in enumerate(self.data[f]['elements']):
                 tmp = results.ElementData[j + 1]['stress'][-1, :]
                 stress[j, :, :] = [[tmp[0], tmp[3], tmp[5]],
@@ -593,12 +603,26 @@ class Application(Frame):
                 strain[j, :, :] = [[E[0], E[3], E[5]],
                                    [E[3], E[1], E[4]],
                                    [E[5], E[4], E[2]]]
-            #eigenvalues for principals - vectorized over fist dimension
-            pstress = np.linalg.eigvals(stress)
-            pstrain = np.linalg.eigvals(strain)
-
-            pstress = np.sort(pstress, axis=1)
-            pstrain = np.sort(pstrain, axis=1)
+                #eigenvalues and eigenvectors of stress and strain tensors
+                #eigenvectors are normalized
+                eigstrain, eigstraindir = np.linalg.eigh(strain[j, :, :])
+                order = np.argsort(eigstrain)
+                eigstrain = eigstrain[order]
+                eigstraindir /= np.linalg.norm(eigstraindir, axis=0, keepdims=True)
+                eigstraindir = eigstraindir[:, order]
+                pstrain.append(eigstrain)
+                pstraindir.append(eigstraindir)
+                eigstress, eigstressdir = np.linalg.eigh(stress[j, :, :])
+                order = np.argsort(eigstress)
+                eigstress = eigstress[order]
+                eigstressdir /= np.linalg.norm(eigstressdir, axis=0, keepdims=True)
+                eigstressdir = eigstressdir[:, order]
+                pstress.append(eigstress)
+                pstressdir.append(eigstressdir)
+            pstress = np.array(pstress)
+            pstressdir = np.array(pstressdir)
+            pstrain = np.array(pstrain)
+            pstraindir = np.array(pstraindir)
             #save reference volumes
             self.volumes.update({f: mvolumes})
             self.results['Effective Strain (von Mises)'].update(
@@ -607,8 +631,9 @@ class Application(Frame):
                              (pstrain[:, 2] - pstrain[:, 0]) ** 2) /
                             2.0)})
             self.results['Maximum Compressive Strain'].update(
-                {f: pstrain[:, 0]})
-            self.results['Maximum Tensile Strain'].update({f: pstrain[:, 2]})
+                {f: np.outer(pstrain[:, 0], [1 , 1, 1]) * pstraindir[:, :, 0]})
+            self.results['Maximum Tensile Strain'].update(
+                {f: np.outer(pstrain[:, 2], [1, 1, 1]) * pstraindir[:, :, 2]})
             self.results['Maximum Shear Strain'].update(
                 {f: 0.5 * (pstrain[:, 2] - pstrain[:, 0])})
             self.results['Volumetric Strain'].update(
@@ -619,19 +644,25 @@ class Application(Frame):
                              (pstress[:, 1] - pstress[:, 0]) ** 2 +
                              (pstress[:, 2] - pstress[:, 0]) ** 2) / 2.0)})
             self.results['Maximum Compressive Stress'].update(
-                {f: pstress[:, 0]})
-            self.results['Maximum Tensile Stress'].update({f: pstress[:, 2]})
+                {f: np.outer(pstress[:, 0], [1 , 1, 1]) * pstressdir[:, :, 0]})
+            self.results['Maximum Tensile Stress'].update(
+                {f: np.outer(pstress[:, 2], [1, 1, 1]) * pstressdir[:, :, 2]})
             self.results['Maximum Shear Stress'].update(
                 {f: 0.5 * (pstress[:, 2] - pstress[:, 0])})
             self.results['Pressure'].update(
                 {f: np.sum(pstress, axis=1) / 3.0})
+
+            self.results['Displacement'].update({f: displacement})
 
         for i, k in enumerate(self.outputs.keys()):
             if self.outputs[k].get():
                 for m in self.matched:
                     weights = self.volumes[m[0]] / np.sum(self.volumes[m[0]])
                     for j, f in enumerate(m):
-                        dat = np.ravel(self.results[k][f])
+                        if len(self.results[k][f].shape) > 1:
+                            dat = np.ravel(np.linalg.norm(self.results[k][f], axis=1))
+                        else:
+                            dat = np.ravel(self.results[k][f])
                         if self.analysis['Generate Histograms'].get():
                             IQR = np.subtract(*np.percentile(dat, [75, 25]))
                             nbins = (int(np.ptp(dat) /
@@ -650,8 +681,12 @@ class Application(Frame):
                                                       'data': dat}
                     if self.analysis['Calculate Differences'].get():
                         for c in itertools.combinations(m, 2):
-                            dat1 = np.ravel(self.results[k][c[0]])
-                            dat2 = np.ravel(self.results[k][c[1]])
+                            if len(self.results[k][c[0]].shape) > 1:
+                                dat1 = np.ravel(np.linalg.norm(self.results[k][c[0]], axis=1))
+                                dat2 = np.ravel(np.linalg.norm(self.results[k][c[1]], axis=1))
+                            else:
+                                dat1 = np.ravel(self.results[k][c[0]])
+                                dat2 = np.ravel(self.results[k][c[1]])
                             difference = dat2 - dat1
                             wrms = np.sqrt(np.average(difference ** 2,
                                                       weights=weights))
@@ -834,9 +869,23 @@ class Application(Frame):
                             vtkArray = numpy_support.numpy_to_vtk(
                                 np.ravel(self.results[output][f]).astype('f'),
                                 deep=True, array_type=vtk.VTK_FLOAT)
+                            shape = self.results[output][f].shape
+                            if len(shape) == 2:
+                                vtkArray.SetNumberOfComponents(shape[1])
+                            elif len(shape) == 1:
+                                vtkArray.SetNumberOfComponents(1)
+                            else:
+                                print("WARNING: {:s} has rank {:d}".format(f, len(shape)))
+                                continue
                             vtkArray.SetName(trunc_name[1] + ' ' + output)
                             self.vtkMeshes[m[0]].GetCellData().AddArray(
                                 vtkArray)
+                for f in m:
+                    arr = numpy_support.numpy_to_vtk(np.ravel(self.results['Displacement'][f]).astype('f'),
+                                                    deep=True, array_type=vtk.VTK_FLOAT)
+                    arr.SetName(trunc_name[1] + ' ' + 'Displacement')
+                    arr.SetNumberOfComponents(3)
+                    self.vtkMeshes[m[0]].GetPointData().AddArray(arr)
 
                 object_name = string.replace(trunc_name[2], "cellFEA", "Cell")
                 object_name = string.replace(object_name, ".pkl", ".vtu")

@@ -4,12 +4,12 @@
 --index-url=https://webdisk.ucalgary.ca/~ssibole/public_html/
 --extra-index-url https://pypi.python.org/simple/
 --use-wheel
-numpy==1.9.3
-scipy
+numpy>=1.11
+scipy>=0.16
 MeshPy
 febio
 matplotlib
-scikit-learn
+scikit-learn>=0.17
 xlrd==0.9.3
 xlwt==0.7.5
 wquantiles

@@ -186,6 +186,22 @@ class Volume(object):
         if self.depth_adjust:
             self.adjustForDepth()
 
+        # if regions are not specified, assume there is only one cell
+        # and default to whole image
+        if regions is None:
+            size = np.array(self._img.GetSize(), int) - 1
+            if self._img.GetDimension() == 3:
+                self._regions = [[1, 1, 1] + list(size)]
+                self._img = sitk.MirrorPad(self._img, padLowerBound=(1, 1, 1),
+                                           padUpperBound=(1, 1, 1))
+                self._img.SetOrigin((0, 0, 0))
+            else:
+                self._img = sitk.MirrorPad(self._img, padLowerBound=(1, 1),
+                                           padUpperBound=(1, 1))
+                self._img.SetOrigin((0, 0, 0))
+                self._regions = [[1, 1] + list(size)]
+        else:
+            self._regions = regions
         # define a blank image with the same size and spacing as
         # image stack to add segmented cells to
         self.cells = sitk.Image(self._img.GetSize(), self._imgType)
@@ -201,16 +217,6 @@ class Volume(object):
         self.levelsets = []
 
         self.surfaces = []
-        # if regions are not specified, assume there is only one cell
-        # and default to whole image
-        if regions is None:
-            size = np.array(self._img.GetSize(), int) - 1
-            if self._img.GetDimension() == 3:
-                self._regions = [[0, 0, 0] + list(size)]
-            else:
-                self._regions = [[0, 0] + list(size)]
-        else:
-            self._regions = regions
 
         self.volumes = []
         self.centroids = []
@@ -379,7 +385,7 @@ class Volume(object):
             parameters = {'radius': 4,
                           'iterations': 10,
                           'patches': 20,
-                          'noise model': 'poisson'}
+                          'noise model': 3}
             noise_models = {'nomodel': 0,
                             'gaussian': 1,
                             'rician': 2,
@@ -394,6 +400,7 @@ class Volume(object):
                 except:
                     raise SystemExit("{:s} is not a parameter of {:s}"
                                      .format(p, self.smoothing_method))
+
             smooth = sitk.PatchBasedDenoisingImageFilter()
             smooth.KernelBandwidthEstimationOn()
             smooth.SetNoiseModel(parameters['noise model'])
@@ -1204,7 +1211,12 @@ class Volume(object):
                 smooth.SetFeatureAngle(120.0)
                 smooth.Update()
 
-                self.surfaces.append(smooth.GetOutput())
+                laplaceSmooth = vtk.vtkSmoothPolyDataFilter()
+                laplaceSmooth.SetInputConnection(smooth.GetOutputPort())
+                laplaceSmooth.SetNumberOfIterations(5)
+                laplaceSmooth.Update()
+
+                self.surfaces.append(laplaceSmooth.GetOutput())
                 filename = 'cell{:02d}.stl'.format(i + 1)
                 stl.SetFileName(
                     str(os.path.normpath(self._output_dir +
