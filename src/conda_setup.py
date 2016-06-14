@@ -1,5 +1,10 @@
 from setuptools import setup
 from setuptools.dist import Distribution
+import os
+
+here = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(os.path.join(here, os.path.pardir), "README.md"), encoding="utf-8") as f:
+    long_description = f.read()
 
 class BinaryDistribution(Distribution):
     def is_pure(self):
