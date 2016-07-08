@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import numpy as np
 from vtk.util import vtkImageImportFromArray as vti
 from vtk.util.numpy_support import (vtk_to_numpy, numpy_to_vtk) 
-from meshpy.tet import (MeshInfo, build, Options)
+from tetmesh import mesh
 
 
 class CellMech(object):
@@ -50,7 +50,7 @@ class CellMech(object):
     dsurfs : [,vtkPolyData,...]
         Polygonal surfaces of objects in deformed state.
     rmeshes : [,vtkUnstructuredGrid,...]
-        TETGEN generated tetrahedral meshes.
+        Tetrahedral meshes of undeformed geometries.
     rcentroids : [,ndarray(3, float),...]
         Volumetric centroids of objects in reference state.
     dcentroids : [,ndarray(3, float),...]
@@ -448,8 +448,7 @@ class CellMech(object):
 
     def _make3Dmesh(self, filename, frame, vConst):
         """
-        Generates a 3-D tetrahedral mesh from a polygonal surface using TETGEN
-        wrapped by MeshPy.
+        Generates a 3-D tetrahedral mesh using tetmesh module build on CGAL.
         These meshes are then used to determine the object's volume, centroid,
         and the axes of the ellipsoid that has equivalent principal moments of
         inertia.
@@ -476,124 +475,33 @@ class CellMech(object):
         """
         vConst /= 5000.0
         edgeSize = (vConst*12/np.sqrt(2)) ** (1./3.)
-        s = MeshInfo()
-        s.load_stl(filename)
-        #use TETGEN to generate mesh
-        #switches:
-        # p -
-        # q - refine mesh to improve quality
-        #     1.2 minimum edge ratio
-        #     minangle=15
-        # Y - do not edit surface mesh
-        # O - perform mesh optimization
-        #     optlevel=9
-        #mesh = build(s, options=Options("pq",
-        #                                optlevel=9,
-        #                                minratio=1.5,
-        #))
-        #elements = list(mesh.elements)
-        #nodes = list(mesh.points)
-        #faces = np.array(mesh.faces)
-        #s_nodes = list(np.unique(np.ravel(faces)))
+        m = mesh.Mesher(inputname=filename,
+                        outputname="tmp.vtu",
+                        facetAngle=30.0,
+                        facetDistance=0.1,
+                        edgeLength=edgeSize,
+                        edgeRatio=1.5)
+        m.makeMesh()
 
-        #ntmp = np.array(nodes, np.float64)
-        #arr = numpy_to_vtk(ntmp.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
-        #arr.SetNumberOfComponents(3)
-        #tetraPoints = vtk.vtkPoints()
-        #tetraPoints.SetData(arr)
+        gridReader = vtk.vtkXMLUnstructuredGridReader()
+        gridReader.SetFileName("tmp.vtu")
+        gridReader.Update()
+        vtkMesh = gridReader.GetOutput()
+        nodes = vtk_to_numpy(vtkMesh.GetPoints().GetData())
+        elements = vtk_to_numpy(vtkMesh.GetCells().GetData()).reshape(
+            (vtkMesh.GetNumberOfCells(), 5))[:,1:]
+        extractSurface = vtk.vtkDataSetSurfaceFilter()
+        extractSurface.SetInputData(vtkMesh)
+        extractSurface.Update()
+        faces = extractSurface.GetOutput()
+        N = faces.GetNumberOfPolys()
+        faces = vtk_to_numpy(faces.GetPolys().GetData()).reshape((N, 4))[:,1:]
+        s_nodes = np.unique(np.ravel(faces))
 
-        #vtkMesh = vtk.vtkUnstructuredGrid()
-        #vtkMesh.Allocate(len(elements), len(elements))
-        #vtkMesh.SetPoints(tetraPoints)
-
-        #e = np.array(elements, np.uint32) - 1
-        #e = np.hstack((np.ones((e.shape[0], 1), np.uint32) * 4, e))
-
-        #arr = numpy_to_vtk(e.ravel(), deep=True,
-        #                   array_type=vtk.VTK_ID_TYPE)
-
-        #tet = vtk.vtkCellArray()
-        #tet.SetCells(e.size / 5, arr)
-
-        #vtkMesh.SetCells(10, tet)
-
-        ##Do another pass of meshing
-        #tri = vtk.vtkGeometryFilter()
-        #tri.SetInputData(vtkMesh)
-        #tri.Update()
-
-        #deci = vtk.vtkDecimatePro()
-        #deci.SetTargetReduction(0.1)
-        #deci.PreserveTopologyOff()
-        #deci.BoundaryVertexDeletionOn()
-        #deci.SplittingOn()
-        #deci.SetInputData(tri.GetOutput())
-        #deci.Update()
-
-        #clean = vtk.vtkCleanPolyData()
-        #clean.SetTolerance(0.0)
-        #clean.SetInputData(deci.GetOutput())
-        #clean.Update()
-
-        #normals = vtk.vtkPolyDataNormals()
-        #normals.ConsistencyOn()
-        #normals.AutoOrientNormalsOn()
-        #normals.SetInputData(clean.GetOutput())
-        #normals.Update()
-
-        #fill = vtk.vtkFillHolesFilter()
-        #fill.SetHoleSize(1e6)
-        #fill.SetInputData(normals.GetOutput())
-        #fill.Update()
-
-        #smooth = vtk.vtkWindowedSincPolyDataFilter()
-        #smooth.SetNumberOfIterations(25)
-        #smooth.SetPassBand(0.01)
-        #smooth.SetInputData(deci.GetOutput())
-        #smooth.Update()
-
-        #stl = vtk.vtkSTLWriter()
-        #stl.SetFileName("tmp.stl")
-        #stl.SetInputData(smooth.GetOutput())
-        #stl.Write()
-
-        #s = MeshInfo()
-        #s.load_stl("tmp.stl")
-
-        mesh = build(s, options=Options("pq2.0/20Oa",
-                                        optlevel=10,
-                                        maxvolume=vConst, verbose=True), volume_constraints=True, max_volume=vConst)
-        elements = list(mesh.elements)
-        nodes = list(mesh.points)
-        faces = np.array(mesh.faces)
-        s_nodes = list(np.unique(np.ravel(faces)))
-
-        ntmp = np.array(nodes, np.float64)
-        arr = numpy_to_vtk(ntmp.ravel(), deep=True, array_type=vtk.VTK_DOUBLE)
-        arr.SetNumberOfComponents(3)
-        tetraPoints = vtk.vtkPoints()
-        tetraPoints.SetData(arr)
-
-        vtkMesh = vtk.vtkUnstructuredGrid()
-        vtkMesh.Allocate(len(elements), len(elements))
-        vtkMesh.SetPoints(tetraPoints)
-
-        e = np.array(elements, np.uint32) - 1
-        e = np.hstack((np.ones((e.shape[0], 1), np.uint32) * 4, e))
-
-        arr = numpy_to_vtk(e.ravel(), deep=True,
-                           array_type=vtk.VTK_ID_TYPE)
-
-        tet = vtk.vtkCellArray()
-        tet.SetCells(e.size / 5, arr)
-
-        vtkMesh.SetCells(10, tet)
-
-
-        n1 = ntmp[e[:, 1], :]
-        n2 = ntmp[e[:, 2], :]
-        n3 = ntmp[e[:, 3], :]
-        n4 = ntmp[e[:, 4], :]
+        n1 = nodes[elements[:, 0], :]
+        n2 = nodes[elements[:, 1], :]
+        n3 = nodes[elements[:, 2], :]
+        n4 = nodes[elements[:, 3], :]
         tetraCents = (n1 + n2 + n3 + n4) / 4.0
         e1 = n4 - n1
         e2 = n3 - n1
@@ -627,9 +535,9 @@ class CellMech(object):
         r_minor = np.sqrt(5 * (w[0] + w[1] - w[2]) / (2 * totalVol))
         if frame == 'MATERIAL':
             self.rmeshes.append(vtkMesh)
-            self._snodes.append(s_nodes)
-            self._elements.append(elements)
-            self._nodes.append(nodes)
+            self._snodes.append((s_nodes + 1).tolist())
+            self._elements.append((elements + 1).tolist())
+            self._nodes.append(nodes.tolist())
             self.raxes.append([r_major, r_middle, r_minor])
             self.rcentroids.append(centroid)
             self.rvols.append(totalVol)

@@ -405,6 +405,7 @@ class Application(Frame):
 
             mesh = febio.MeshDef()
             # would be good to vectorize these
+            print self.data[filename]['elements']
             for i, e in enumerate(self.data[filename]['elements']):
                 mesh.elements.append(['tet4', i + 1] + e)
 
