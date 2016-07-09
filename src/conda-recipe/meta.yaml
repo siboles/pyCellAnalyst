@@ -10,9 +10,10 @@ requirements:
   build:
     - python
     - tetmesh
+    - libpng 1.5.13
     - cgal
     - tbb
-    - vtk > 6.0.0
+    - vtk
     - simpleitk
     - numpy
     - scipy
@@ -25,9 +26,10 @@ requirements:
   run:
     - python
     - tetmesh
+    - libpng 1.5.13
     - cgal
     - tbb
-    - vtk > 6.0.0
+    - vtk
     - simpleitk
     - numpy
     - scipy
@@ -45,4 +47,5 @@ test:
 
 about:
   home: https://github.com/siboles/pyCellAnalyst
-  summary:  
+  summary: 'An extensive module for image processing, segmentation, and deformation analysis. Initially aimed at processing 3-D microscopy of cells, this may have applications for other data types as well.'
+  license: MIT License
