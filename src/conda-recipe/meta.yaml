@@ -10,11 +10,10 @@ requirements:
   build:
     - python
     - tetmesh
-    - libpng 1.5.13
     - cgal
     - tbb
     - vtk
-    - simpleitk
+    - simpleitk 0.9.1
     - numpy
     - scipy
     - matplotlib
@@ -26,11 +25,10 @@ requirements:
   run:
     - python
     - tetmesh
-    - libpng 1.5.13
     - cgal
     - tbb
     - vtk
-    - simpleitk
+    - simpleitk 0.9.1
     - numpy
     - scipy
     - matplotlib
