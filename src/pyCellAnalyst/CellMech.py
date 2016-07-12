@@ -473,7 +473,7 @@ class CellMech(object):
             * dvols
             * daxes
         """
-        vConst /= 5000.0
+        vConst /= 30000.0
         edgeSize = (vConst*12/np.sqrt(2)) ** (1./3.)
         m = mesh.Mesher(inputname=filename,
                         outputname="tmp.vtu",
