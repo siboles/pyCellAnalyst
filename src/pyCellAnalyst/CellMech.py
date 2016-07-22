@@ -172,6 +172,7 @@ class CellMech(object):
                 massProps = vtk.vtkMassProperties()
                 massProps.SetInputData(self.rsurfs[-1])
                 massProps.Update()
+                print("Generating tetrahedral mesh from {:s}".format(fname))
                 self._make3Dmesh(
                     str(os.path.normpath(self._ref_dir + os.sep + fname)),
                     'MATERIAL', massProps.GetVolume())
@@ -189,6 +190,7 @@ class CellMech(object):
                 massProps = vtk.vtkMassProperties()
                 massProps.SetInputData(self.dsurfs[-1])
                 massProps.Update()
+                print("Generating tetrahedral mesh from {:s}".format(fname))
                 self._make3Dmesh(
                     str(os.path.normpath(self._def_dir + os.sep + fname)),
                     'SPATIAL', massProps.GetVolume())
@@ -473,14 +475,14 @@ class CellMech(object):
             * dvols
             * daxes
         """
-        vConst /= 30000.0
+        vConst /= 50000.0
         edgeSize = (vConst*12/np.sqrt(2)) ** (1./3.)
         m = mesh.Mesher(inputname=filename,
                         outputname="tmp.vtu",
                         facetAngle=30.0,
                         facetDistance=0.1,
                         edgeLength=edgeSize,
-                        edgeRatio=1.5)
+                        edgeRatio=1.3)
         m.makeMesh()
 
         gridReader = vtk.vtkXMLUnstructuredGridReader()
@@ -490,13 +492,8 @@ class CellMech(object):
         nodes = vtk_to_numpy(vtkMesh.GetPoints().GetData())
         elements = vtk_to_numpy(vtkMesh.GetCells().GetData()).reshape(
             (vtkMesh.GetNumberOfCells(), 5))[:,1:]
-        extractSurface = vtk.vtkDataSetSurfaceFilter()
-        extractSurface.SetInputData(vtkMesh)
-        extractSurface.Update()
-        faces = extractSurface.GetOutput()
-        N = faces.GetNumberOfPolys()
-        faces = vtk_to_numpy(faces.GetPolys().GetData()).reshape((N, 4))[:,1:]
-        s_nodes = np.unique(np.ravel(faces))
+        vertex_type = vtk_to_numpy(vtkMesh.GetPointData().GetArray("Vertex Type"))
+        s_nodes = np.argwhere(vertex_type==1).ravel()
 
         n1 = nodes[elements[:, 0], :]
         n2 = nodes[elements[:, 1], :]
