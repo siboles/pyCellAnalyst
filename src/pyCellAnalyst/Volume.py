@@ -158,8 +158,6 @@ class Volume(object):
         self._stain = stain
         self.display = display
         self._img = None
-        self._imgType = None
-        self._imgTypeMax = None
 
         self.handle_overlap = handle_overlap
         self.smoothing_method = smoothing_method
@@ -204,10 +202,9 @@ class Volume(object):
             self._regions = regions
         # define a blank image with the same size and spacing as
         # image stack to add segmented cells to
-        self.cells = sitk.Image(self._img.GetSize(), self._imgType)
-        self.cells.SetSpacing(self._img.GetSpacing())
-        self.cells.SetOrigin(self._img.GetOrigin())
-        self.cells.SetDirection(self._img.GetDirection())
+
+        self.cells = sitk.Image(self._img.GetSize(), sitk.sitkUInt8)
+        self.cells.CopyInformation(self._img)
 
         # list of smoothed ROIs
         self.smoothed = []
@@ -250,7 +247,6 @@ class Volume(object):
                             self._output_dir + os.sep + 'stack.nii')))
 
     def _parseStack(self):
-        reader = sitk.ImageFileReader()
         for ftype in ['*.nii', '*.tif*']:
             files = fnmatch.filter(sorted(os.listdir(self._vol_dir)), ftype)
             if len(files) > 0:
@@ -268,45 +264,21 @@ class Volume(object):
                 for fname in files:
                     filename = str(
                         os.path.normpath(self._vol_dir + os.sep + fname))
-                    reader.SetFileName(filename)
-                    im = reader.Execute()
-                    if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
-                        img.append(sitk.VectorMagnitude(im))
-                    else:
-                        img.append(im)
-                self._img = sitk.JoinSeries(img)
+                    img.append(sitk.ReadImage(filename, sitk.sitkFloat32))
+                self._img = sitk.RescaleIntensity(sitk.JoinSeries(img), 0.0, 1.0)
                 print("\nImported 3D image stack ranging from {:s} to {:s}"
                       .format(files[0], files[-1]))
             else:
                 print("\nImported 2D image {:s}".format(files[0]))
                 filename = str(
                     os.path.normpath(self._vol_dir + os.sep + files[0]))
-                reader.SetFileName(filename)
-                self._img = reader.Execute()
+                self._img = sitk.RescaleIntensity(sitk.ReadImage(filename, sitk.sitkFloat32))
         elif ftype == "*.nii":
             filename = str(
                 os.path.normpath(self._vol_dir + os.sep + files[0]))
-            im = sitk.ReadImage(filename)
-            if 'vector' in string.lower(im.GetPixelIDTypeAsString()):
-                im = sitk.VectorMagnitude(im)
-            self._img = im
-        #temporarily force convert image to 8bit due to SimpleITK bug
-        self._img = sitk.Cast(sitk.RescaleIntensity(self._img, 0, 255),
-                              sitk.sitkUInt8)
+            im = sitk.ReadImage(filename, sitk.sitkFloat32)
+            self._img = sitk.RescaleIntensity(im, 0.0, 1.0)
 
-
-        self._imgType = self._img.GetPixelIDValue()
-        if self._imgType == 1:
-            self._imgTypeMax = 255
-        elif self._imgType == 3:
-            self._imgTypeMax = 65535
-        elif self._imgType == 0:
-            print("WARNING: Given a 12-bit image.")
-            print("This has been converted to 16-bit.")
-            self._imgType = 3
-            self._imgTypeMax = 65535
-
-        self._img = sitk.Cast(self._img, self._imgType)
         self._img.SetSpacing(self._pixel_dim)
 
     def smoothRegion(self, img):
@@ -577,7 +549,7 @@ class Volume(object):
                                   .format(self._stain)))
 
             if not(method == 'Percentage'):
-                thres.SetNumberOfHistogramBins((self._imgTypeMax + 1) / 2)
+                thres.SetNumberOfHistogramBins(128)
                 thres.SetInsideValue(0)
                 thres.SetOutsideValue(1)
 
@@ -634,13 +606,13 @@ class Volume(object):
                        np.any(np.intersect1d(region_bnds[1],
                                              label_bounds[1])):
                         newt += 0.01 * t
-                        seg = sitk.BinaryThreshold(simg, int(newt), 1e7)
+                        seg = sitk.BinaryThreshold(simg, newt, 1e7)
                     else:
                         break
 
                 if not(newt == t):
                     print(("... ... Adjusted the threshold to: "
-                          "{:d}".format(int(newt))))
+                          "{:d}".format(newt)))
                 self.thresholds.append(newt)
             else:
                 if self.opening:
@@ -666,21 +638,19 @@ class Volume(object):
                 else:
                     self.thresholds.append(t)
 
-            tmp = sitk.Image(self._img.GetSize(), self._imgType)
-            tmp.SetSpacing(self._img.GetSpacing())
-            tmp.SetOrigin(self._img.GetOrigin())
-            tmp.SetDirection(self._img.GetDirection())
+            tmp = sitk.Image(self._img.GetSize(), sitk.sitkUInt8)
+            tmp.CopyInformation(self._img)
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(tmp)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             tmp = resampler.Execute((r == label) * (i + 1))
-            self.cells = sitk.Add(self.cells, sitk.Cast(tmp, self._imgType))
+            self.cells = sitk.Add(self.cells, tmp)
             # scale smoothed image if independent slices option flagged
             if self.two_dim:
                 simg = self.scale2D(simg, tlist)
             self.smoothed.append(simg)
             if self.debug:
-                sitk.WriteImage(sitk.Cast(simg, self._imgType),
+                sitk.WriteImage(sitk.RescaleIntensity(simg, 0, 255),
                                 str(os.path.normpath(
                                     self._output_dir + os.sep +
                                     "smoothed_{:03d}.nii".format(i + 1))))
@@ -759,10 +729,8 @@ class Volume(object):
         self.thresholdSegmentation(method=seed_method, ratio=ratio,
                                    adaptive=adaptive)
         dimension = self._img.GetDimension()
-        newcells = sitk.Image(self.cells.GetSize(), self._imgType)
-        newcells.SetSpacing(self.cells.GetSpacing())
-        newcells.SetDirection(self.cells.GetDirection())
-        newcells.SetOrigin(self.cells.GetOrigin())
+        newcells = sitk.Image(self.cells.GetSize(), sitk.sitkUInt8)
+        newcells.CopyInformation(self.cells)
         for i, region in enumerate(self._regions):
             print("\n-------------------------------------------")
             print("Evolving Geodesic Active Contour for Cell {:d}"
@@ -833,17 +801,17 @@ class Volume(object):
                 canny = sitk.InvertIntensity(canny, 1)
                 canny = sitk.Cast(canny, sitk.sitkFloat32)
                 if self.debug:
-                    sitk.WriteImage(sitk.Cast(simg, self._imgType),
+                    sitk.WriteImage(sitk.RescaleIntensity(simg, 0, 255),
                                     str(os.path.normpath(
                                         self._output_dir +
                                         os.sep + "smoothed_{:03d}.nii"
                                         .format(i + 1))))
-                    sitk.WriteImage(sitk.Cast(seed, self._imgType),
+                    sitk.WriteImage(sitk.RescaleIntensity(seed, 0, 255),
                                     str(os.path.normpath(
                                         self._output_dir +
                                         os.sep + "seed_{:03d}.nii"
                                         .format(i + 1))))
-                    sitk.WriteImage(sitk.Cast(canny, self._imgType),
+                    sitk.WriteImage(sitk.RescaleIntensity(canny, 0, 255),
                                     str(os.path.normpath(
                                         self._output_dir +
                                         os.sep + "edge_{:03d}.nii"
@@ -865,17 +833,15 @@ class Volume(object):
                       .format(gd.GetRMSChange()))
             self.levelsets.append(seg)
             seg = sitk.BinaryThreshold(seg, -1e7, 0) * (i + 1)
-            tmp = sitk.Image(self._img.GetSize(), self._imgType)
-            tmp.SetSpacing(self._img.GetSpacing())
-            tmp.SetOrigin(self._img.GetOrigin())
-            tmp.SetDirection(self._img.GetDirection())
+            tmp = sitk.Image(self._img.GetSize(), sitk.sitkUInt8)
+            tmp.CopyInformation(self._img)
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(tmp)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             tmp = resampler.Execute(seg)
             if self.fillholes:
                 tmp = sitk.BinaryFillhole(tmp)
-            newcells = sitk.Add(newcells, sitk.Cast(tmp, self._imgType))
+            newcells = sitk.Add(newcells, tmp)
             #Handle Overlap
             if self.handle_overlap:
                 maxlabel = self._getMinMax(newcells)[1]
@@ -927,10 +893,8 @@ class Volume(object):
         self.thresholdSegmentation(method=seed_method, ratio=ratio,
                                    adaptive=adaptive)
         dimension = self._img.GetDimension()
-        newcells = sitk.Image(self.cells.GetSize(), self._imgType)
-        newcells.SetSpacing(self.cells.GetSpacing())
-        newcells.SetDirection(self.cells.GetDirection())
-        newcells.SetOrigin(self.cells.GetOrigin())
+        newcells = sitk.Image(self.cells.GetSize(), sitk.sitkUInt8)
+        newcells.CopyInformation(self.cells)
         for i, region in enumerate(self._regions):
             print("\n-------------------------------------------")
             print("Evolving Edge-free Active Contour for Cell {:d}"
@@ -987,7 +951,7 @@ class Volume(object):
             seed = sitk.AntiAliasBinary(seed)
             seed = sitk.BinaryThreshold(seed, 0.5, 1e7)
             if self.debug:
-                sitk.WriteImage(sitk.Cast(seed, self._imgType),
+                sitk.WriteImage(sitk.RescaleIntensity(seed, 0, 255),
                                 str(os.path.normpath(
                                     self._output_dir + os.sep +
                                     "seed_{:03d}.nii".format(i + 1))))
@@ -1014,9 +978,7 @@ class Volume(object):
                     stack.append(cv.Execute(phi0, sitk.Cast(im,
                                                             sitk.sitkFloat32)))
                 seg = sitk.JoinSeries(stack)
-                seg.SetSpacing(simg.GetSpacing())
-                seg.SetOrigin(simg.GetOrigin())
-                seg.SetDirection(simg.GetDirection())
+                seg.CopyInformation(simg)
             else:
                 phi0 = sitk.SignedMaurerDistanceMap(seed,
                                                     insideIsPositive=False,
@@ -1034,17 +996,15 @@ class Volume(object):
             labelstats = self._getLabelShape(r)
             label = np.argmax(labelstats['volume']) + 1
             seg = (r == label) * (i + 1)
-            tmp = sitk.Image(self._img.GetSize(), self._imgType)
-            tmp.SetSpacing(self._img.GetSpacing())
-            tmp.SetOrigin(self._img.GetOrigin())
-            tmp.SetDirection(self._img.GetDirection())
+            tmp = sitk.Image(self._img.GetSize(), sitk.sitkUInt8) 
+            tmp.CopyInformation(self._img)
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(tmp)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
             tmp = resampler.Execute(seg)
             if self.fillholes:
                 tmp = sitk.BinaryFillhole(tmp)
-            newcells = sitk.Add(newcells, sitk.Cast(tmp, self._imgType))
+            newcells = sitk.Add(newcells, tmp)
             #Handle Overlap
             if self.handle_overlap:
                 maxlabel = self._getMinMax(newcells)[1]
@@ -1395,10 +1355,7 @@ class Volume(object):
         for i, s in enumerate(stack):
             stack[i] = sitk.Cast(s, sitk.sitkFloat32) * ratios[i]
         nimg = sitk.JoinSeries(stack)
-        nimg.SetOrigin(self._img.GetOrigin())
-        nimg.SetSpacing(self._img.GetSpacing())
-        nimg.SetDirection(self._img.GetDirection())
-        sitk.Cast(nimg, self._img.GetPixelIDValue())
+        nimg.CopyInformation(self._img)
         self._img = nimg
 
     def smooth2D(self, img):
@@ -1408,9 +1365,7 @@ class Volume(object):
             s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
             stack.append(self.smoothRegion(s))
         simg = sitk.JoinSeries(stack)
-        simg.SetOrigin(img.GetOrigin())
-        simg.SetSpacing(img.GetSpacing())
-        simg.SetDirection(img.GetDirection())
+        simg.CopyInformation(img)
         return simg
 
     def threshold2D(self, img, thres, ratio):
@@ -1433,9 +1388,7 @@ class Volume(object):
                 values.append(t)
  
         seg = sitk.JoinSeries(stack)
-        seg.SetOrigin(img.GetOrigin())
-        seg.SetSpacing(img.GetSpacing())
-        seg.SetDirection(img.GetDirection())
+        seg.CopyInformation(img)
         return seg, max(values), min(values), values
 
     def scale2D(self, img, thresh):
@@ -1450,9 +1403,7 @@ class Volume(object):
             else:
                 stack.append(sitk.Cast(s, sitk.sitkFloat32))
         nimg = sitk.JoinSeries(stack)
-        nimg.SetOrigin(img.GetOrigin())
-        nimg.SetSpacing(img.GetSpacing())
-        nimg.SetDirection(img.GetDirection())
+        nimg.CopyInformation(img)
         return nimg
 
     def geodesic2D(self, seed, simg,
@@ -1487,7 +1438,5 @@ class Volume(object):
                                              useImageSpacing=True)
             stack.append(gd.Execute(d, canny))
         seg = sitk.JoinSeries(stack)
-        seg.SetSpacing(simg.GetSpacing())
-        seg.SetOrigin(simg.GetOrigin())
-        seg.SetDirection(simg.GetDirection())
+        seg.CopyInformation(simg)
         return seg
