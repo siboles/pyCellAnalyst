@@ -13,7 +13,7 @@ requirements:
     - cgal
     - tbb
     - vtk
-    - simpleitk 0.10.1
+    - simpleitk 0.10.0
     - numpy
     - scipy
     - matplotlib

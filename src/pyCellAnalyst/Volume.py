@@ -272,7 +272,7 @@ class Volume(object):
                 print("\nImported 2D image {:s}".format(files[0]))
                 filename = str(
                     os.path.normpath(self._vol_dir + os.sep + files[0]))
-                self._img = sitk.RescaleIntensity(sitk.ReadImage(filename, sitk.sitkFloat32))
+                self._img = sitk.RescaleIntensity(sitk.ReadImage(filename, sitk.sitkFloat32), 0.0, 1.0)
         elif ftype == "*.nii":
             filename = str(
                 os.path.normpath(self._vol_dir + os.sep + files[0]))
@@ -403,7 +403,9 @@ class Volume(object):
             img = sitk.LaplacianSharpening(img)
         if self._stain == "Background":
             img = sitk.InvertIntensity(img)
-        return sitk.Cast(img, sitk.sitkFloat32)
+        # replace border pixel values with average of border slices
+        roi = self._flattenBorder(img)
+        return sitk.RescaleIntensity(img, 0.0, 1.0)
 
     def _getMinMax(self, img):
         mm = sitk.MinimumMaximumImageFilter()
@@ -417,13 +419,17 @@ class Volume(object):
         labelshape = {'volume': [],
                       'centroid': [],
                       'ellipsoid diameters': [],
-                      'bounding box': []}
+                      'ellipsoid axes': [],
+                      'bounding box': [],
+                      'border size': []}
         for l in labels:
             labelshape['volume'].append(ls.GetPhysicalSize(l))
             labelshape['centroid'].append(ls.GetCentroid(l))
             labelshape['ellipsoid diameters'].append(
                 ls.GetEquivalentEllipsoidDiameter(l))
+            labelshape['ellipsoid axes'].append(ls.GetPrincipalAxes(l))
             labelshape['bounding box'].append(ls.GetBoundingBox(l))
+            labelshape['border size'].append(ls.GetPerimeterOnBorder(l))
         return labelshape
 
     def thresholdSegmentation(self, method='Percentage',
@@ -488,6 +494,7 @@ class Volume(object):
                 a.SetOrigin(roi.GetOrigin())
                 a.SetDirection(roi.GetDirection())
                 roi = a
+
             if self.two_dim:
                 simg = self.smooth2D(roi)
             else:
@@ -508,10 +515,10 @@ class Volume(object):
 
                 if self.two_dim:
                     print(("... Threshold using {:s} method ranged: "
-                           "{:d}-{:d}".format(method, int(tlow), int(thigh))))
+                           "{:6.5f}-{:6.5f}".format(method, tlow, thigh)))
                 else:
                     print(("... Thresholded using {:s} method at a "
-                           "value of: {:d}".format(method, int(t))))
+                           "value of: {:6.5f}".format(method, t)))
 
             elif method == 'Otsu':
                 thres = sitk.OtsuThresholdImageFilter()
@@ -556,15 +563,15 @@ class Volume(object):
                 if self.two_dim:
                     seg, thigh, tlow, tlist = self.threshold2D(simg, thres, ratio)
                     print(("... Thresholds determined by {:s} method ranged: "
-                           "[{:d}-{:d}".format(method, int(tlow), int(thigh))))
+                           "[{:6.5f}-{:6.5f}".format(method, tlow, thigh)))
                 else:
                     seg = thres.Execute(simg)
                     t = thres.GetThreshold()
-                    print("... Threshold determined by {:s} method: {:d}"
-                          .format(method, int(t)))
+                    print("... Threshold determined by {:s} method: {:6.5f}"
+                          .format(method, t))
 
             if adaptive and not(self.two_dim):
-                newt = np.copy(t)
+                newt = float(np.copy(t))
                 if dimension == 3:
                     region_bnds = [(0, region[3]), (0, region[4])]
                 else:
@@ -595,24 +602,18 @@ class Volume(object):
                     except:
                         break
 
-                    if dimension == 3:
-                        label_bounds = [(bb[0], bb[0] + bb[3]),
-                                        (bb[1], bb[1] + bb[4])]
-                    else:
-                        label_bounds = [(bb[0], bb[0] + bb[2]),
-                                        (bb[1], bb[1] + bb[3])]
-                    if np.any(np.intersect1d(region_bnds[0],
-                                             label_bounds[0])) or \
-                       np.any(np.intersect1d(region_bnds[1],
-                                             label_bounds[1])):
-                        newt += 0.01 * t
+                    if labelstats['border size'][label - 1] > 0:
+                        if t < 0.1:
+                            newt += 0.01 * (t+0.1)
+                        else:
+                            newt += 0.01 * t
                         seg = sitk.BinaryThreshold(simg, newt, 1e7)
                     else:
                         break
 
                 if not(newt == t):
                     print(("... ... Adjusted the threshold to: "
-                          "{:d}".format(newt)))
+                           "{:6.5f}".format(newt)))
                 self.thresholds.append(newt)
             else:
                 if self.opening:
@@ -782,10 +783,19 @@ class Volume(object):
                 simg = refine.Execute(roi)
             refine.SetInterpolator(sitk.sitkNearestNeighbor)
             seed = refine.Execute(seed)
-            #smooth the perimeter of the binary seed
-            seed = sitk.BinaryMorphologicalClosing(seed == (i + 1), 3)
-            seed = sitk.AntiAliasBinary(seed)
-            seed = sitk.BinaryThreshold(seed, 0.5, 1e7)
+            if self._getMinMax(seed)[1] < 1:
+                seed = self._replaceSeed(seed)
+            else:
+                #smooth the perimeter of the binary seed
+                dm = sitk.SignedMaurerDistanceMap(seed, False, False, False)
+                mindist = self._getMinMax(dm)[0]
+                #shrink seed by 20%
+                seed = dm <= 0.2 * mindist
+                labels = sitk.ConnectedComponent(seed)
+                labelstats = self._getLabelShape(labels)
+                ind = np.argmin(labelstats['border size'])
+                seed = labels == ind + 1
+
             if self.two_dim and dimension == 3:
                 seg = self.geodesic2D(seed, simg,
                                       cannyLower, cannyUpper, canny_variance,
@@ -800,6 +810,22 @@ class Volume(object):
 
                 canny = sitk.InvertIntensity(canny, 1)
                 canny = sitk.Cast(canny, sitk.sitkFloat32)
+                a = sitk.GetArrayFromImage(canny)
+                if len(a.shape) == 3:
+                    ind = [np.s_[0:2, :, :], np.s_[-2:, :, :],
+                           np.s_[:, 0:2, :], np.s_[:, -2:, :],
+                           np.s_[:, :, 0:2], np.s_[:, :, -2:]]
+                else:
+                    ind = [np.s_[0:2, :], np.s_[-2:, :],
+                           np.s_[:, 0:2], np.s_[:, -2:]]
+
+                m = np.max(a.ravel())
+                for ii in ind:
+                    a[ii] = m
+                tmp = sitk.GetImageFromArray(a)
+                tmp.CopyInformation(canny)
+                canny = tmp
+
                 if self.debug:
                     sitk.WriteImage(sitk.RescaleIntensity(simg, 0, 255),
                                     str(os.path.normpath(
@@ -831,6 +857,7 @@ class Volume(object):
                       .format(gd.GetElapsedIterations()))
                 print("... ... Change in RMS Error: {:.3e}"
                       .format(gd.GetRMSChange()))
+
             self.levelsets.append(seg)
             seg = sitk.BinaryThreshold(seg, -1e7, 0) * (i + 1)
             tmp = sitk.Image(self._img.GetSize(), sitk.sitkUInt8)
@@ -946,10 +973,19 @@ class Volume(object):
                 simg = refine.Execute(roi)
             refine.SetInterpolator(sitk.sitkNearestNeighbor)
             seed = refine.Execute(seed)
-            #smooth the perimeter of the binary seed
-            seed = sitk.BinaryMorphologicalClosing(seed == (i + 1), 3)
-            seed = sitk.AntiAliasBinary(seed)
-            seed = sitk.BinaryThreshold(seed, 0.5, 1e7)
+            if self._getMinMax(seed)[1] < 1:
+                seed = self._replaceSeed(seed)
+            else:
+                #smooth the perimeter of the binary seed
+                dm = sitk.SignedMaurerDistanceMap(seed, False, False, False)
+                mindist = self._getMinMax(dm)[0]
+                #shrink seed by 20%
+                seed = dm <= 0.2 * mindist
+                labels = sitk.ConnectedComponent(seed)
+                labelstats = self._getLabelShape(labels)
+                ind = np.argmin(labelstats['border size'])
+                seed = labels == ind + 1
+
             if self.debug:
                 sitk.WriteImage(sitk.RescaleIntensity(seed, 0, 255),
                                 str(os.path.normpath(
@@ -960,7 +996,6 @@ class Volume(object):
             cv.SetNumberOfIterations(iterations)
             cv.UseImageSpacingOn()
             cv.SetHeavisideStepFunction(0)
-            cv.SetReinitializationSmoothingWeight(5.0)
             cv.SetEpsilon(upsampling)
             cv.SetCurvatureWeight(curvature)
             cv.SetLambda1(lambda1)
@@ -987,21 +1022,27 @@ class Volume(object):
 
                 seg = cv.Execute(phi0,
                                  sitk.Cast(simg, sitk.sitkFloat32))
+                print("... Edge-free Active Contour Segmentation Completed")
+                print("... ... Elapsed Iterations: {:d}"
+                      .format(cv.GetElapsedIterations()))
+                print("... ... Change in RMS Error: {:.3e}"
+                      .format(cv.GetRMSChange()))
+
             self.levelsets.append(seg)
-            seg = sitk.BinaryThreshold(seg, 1e-7, 1e7)
+            b = sitk.BinaryThreshold(seg, 1e-7, 1e7)
             #Get connected regions
             if self.opening:
-                seg = sitk.BinaryMorphologicalOpening(seg, upsampling)
-            r = sitk.ConnectedComponent(seg)
+                b = sitk.BinaryMorphologicalOpening(b, upsampling)
+            r = sitk.ConnectedComponent(b)
             labelstats = self._getLabelShape(r)
             label = np.argmax(labelstats['volume']) + 1
-            seg = (r == label) * (i + 1)
+            b = (r == label) * (i + 1)
             tmp = sitk.Image(self._img.GetSize(), sitk.sitkUInt8) 
             tmp.CopyInformation(self._img)
             resampler = sitk.ResampleImageFilter()
             resampler.SetReferenceImage(tmp)
             resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-            tmp = resampler.Execute(seg)
+            tmp = resampler.Execute(b)
             if self.fillholes:
                 tmp = sitk.BinaryFillhole(tmp)
             newcells = sitk.Add(newcells, tmp)
@@ -1068,10 +1109,8 @@ class Volume(object):
                                              unknown2.shape[0]]
             b[a == (l - i - 1)] = classification[unknown1.shape[0] +
                                                  unknown2.shape[0]:]
-        cells = sitk.Cast(sitk.GetImageFromArray(b), self._imgType)
-        cells.SetSpacing(self._img.GetSpacing())
-        cells.SetOrigin(self._img.GetOrigin())
-        cells.SetDirection(self._img.GetDirection())
+        cells = sitk.Cast(sitk.GetImageFromArray(b), sitk.sitkUInt8)
+        cells.CopyInformation(self._img)
         return cells
 
     def writeSurfaces(self):
@@ -1440,3 +1479,35 @@ class Volume(object):
         seg = sitk.JoinSeries(stack)
         seg.CopyInformation(simg)
         return seg
+
+    def _replaceSeed(self, seed):
+        print(("WARNING: seed for active segmentation was zero; using sphere"
+               " with diameter half of minimum region of interest edge."))
+        size = np.array(seed.GetSize(), int)
+        idx = size * np.array(seed.GetSpacing(), float) / 2.0
+        d = np.min(size) / 2
+        seed[seed.TransformPhysicalPointToIndex(idx)] = 1
+        seed = sitk.BinaryDilate(seed, d)
+        return seed
+
+    def _flattenBorder(self, img):
+        """
+        To help ensure the segmentation does not touch
+        the cropped region border, the voxel intensities of
+        the 6 border slices are replaced by the intensity of
+        their 1st percentile.
+        """
+        arr = sitk.GetArrayFromImage(img)
+        if len(arr.shape) == 3:
+            ind = [np.s_[0, :, :], np.s_[-1, :, :],
+                   np.s_[:, 0, :], np.s_[:, -1, :],
+                   np.s_[:, : , 0], np.s_[:, :, -1]]
+        else:
+            ind = [np.s_[0, :], np.s_[-1, :],
+                   np.s_[:, 0], np.s_[:, -1]]
+        for i in ind:
+            arr[i] = np.percentile(arr[i].ravel(), 10)
+
+        nimg = sitk.GetImageFromArray(arr)
+        nimg.CopyInformation(img)
+        return nimg
