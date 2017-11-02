@@ -1,9 +1,15 @@
+from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import map
+from builtins import str
+from builtins import range
+from past.utils import old_div
 import febio
 import pickle
-import string
 import subprocess
 import os
-import tkFileDialog
+import tkinter.filedialog
 import platform
 import fnmatch
 import itertools
@@ -11,8 +17,8 @@ import time
 import datetime
 import vtk
 from vtk.util import numpy_support
-from Tkinter import *
-from ttk import Notebook
+from tkinter import *
+from tkinter.ttk import Notebook
 from collections import OrderedDict
 import numpy as np
 
@@ -162,7 +168,7 @@ class Application(Frame):
         self.createWidgetsTab2()
 
     def getFEBioLocation(self, msg, home):
-        filename = tkFileDialog.askopenfilename(
+        filename = tkinter.filedialog.askopenfilename(
             parent=root, initialdir=home,
             title=msg)
         if filename:
@@ -274,8 +280,7 @@ class Application(Frame):
         self.groundSubstanceSettingsFrame.grid(
             row=1, column=0, padx=5, pady=5, sticky=NW)
         for i, (t, v) in enumerate(
-                self.groundParameters[self.groundSubstance.get() - 1]
-                .items()):
+                self.groundParameters[self.groundSubstance.get() - 1].items()):
             Label(self.groundSubstanceSettingsFrame, text=t).grid(row=i,
                                                                   column=0,
                                                                   sticky=NW)
@@ -305,8 +310,7 @@ class Application(Frame):
                                                                   sticky=NW)
         else:
             for i, (t, v) in enumerate(
-                    self.tensileParameters[self.tensileNetwork.get() - 1]
-                    .items()):
+                    self.tensileParameters[self.tensileNetwork.get() - 1].items()):
                 Label(self.tensileNetworkSettingsFrame, text=t).grid(row=i,
                                                                      column=0,
                                                                      sticky=NW)
@@ -336,8 +340,7 @@ class Application(Frame):
                                                                   sticky=NW)
         else:
             for i, (t, v) in enumerate(
-                    self.tensileParameters[self.tensileNetwork.get() - 1]
-                    .items()):
+                    self.tensileParameters[self.tensileNetwork.get() - 1].items()):
                 Label(self.tensileNetworkSettingsFrame, text=t).grid(row=i,
                                                                      column=0,
                                                                      sticky=NW)
@@ -360,7 +363,7 @@ class Application(Frame):
             k = 0.01
             print(("Cutoff Grade must be greater than zero"
                    " Using a value of 0.01."))
-        s = 0.5 * (1 - np.tanh((x - d) / k))
+        s = 0.5 * (1 - np.tanh(old_div((x - d), k)))
         a.plot(x, s)
         a.set_xlabel("Normalized distance from object surface")
         a.set_ylabel("Tensile Network Weight")
@@ -378,7 +381,7 @@ class Application(Frame):
                                         columnspan=2, sticky=NW)
 
     def addPickle(self):
-        filenames = tkFileDialog.askopenfilenames(
+        filenames = tkinter.filedialog.askopenfilenames(
             parent=root, initialdir=self.lastdir,
             title="Please choose pickle file(s) for analysis.")
         filenames = root.tk.splitlist(filenames)
@@ -412,9 +415,9 @@ class Application(Frame):
                 mesh.nodes.append([i + 1] + n)
 
             mesh.addElementSet(setname='cell',
-                               eids=range(1, len(mesh.elements) + 1))
+                               eids=list(range(1, len(mesh.elements) + 1)))
 
-            modelname = string.replace(filename, '.pkl', '.feb')
+            modelname = filename.replace('.pkl', '.feb')
             model = febio.Model(modelfile=modelname,
                                 steps=[{'Displace': 'solid'}])
 
@@ -440,16 +443,16 @@ class Application(Frame):
             gtype = keywords[
                 self.groundSubstances[self.groundSubstance.get() - 1]]
             gattributes = {}
-            for (k, v) in self.groundParameters[
-                    self.groundSubstance.get() - 1].items():
+            for (k, v) in list(self.groundParameters[
+                    self.groundSubstance.get() - 1].items()):
                 # transversely isotropic case
                 if isinstance(keywords[k], list):
                     for a in keywords[k]:
                         # G12 = E2 / (2 * (1 + v12))
                         if a == "G12":
                             gattributes[a] = str(
-                                float(gattributes["E2"]) /
-                                (2.0 * (1 + float(gattributes["v12"]))))
+                                old_div(float(gattributes["E2"]),
+                                (2.0 * (1 + float(gattributes["v12"])))))
                         else:
                             gattributes[a] = str(v.get())
                 # any other case
@@ -487,13 +490,13 @@ class Application(Frame):
                     norms = np.linalg.norm(crossed, axis=1)
                     # get the index of the maximum norm; so never zero
                     ind2 = np.argmax(norms)
-                    b = crossed[ind, :] / norms[ind2]
-                    normal = map(str, list(normal))
-                    b = map(str, list(b))
+                    b = old_div(crossed[ind, :], norms[ind2])
+                    normal = list(map(str, list(normal)))
+                    b = list(map(str, list(b)))
                     d = self.tensileParameters[ind]["Distance Cutoff [0, 1]"].get()
                     k = self.tensileParameters[ind]["Cutoff Grade (0, 1]"].get()
-                    x = np.abs(distances[i]) / maxd
-                    w = 0.5 * (1 - np.tanh((x - d) / k))
+                    x = old_div(np.abs(distances[i]), maxd)
+                    w = 0.5 * (1 - np.tanh(old_div((x - d), k)))
                     if w < 0.05:
                         w = 0.05
                     tmp_ksi = [w * v for v in ksi]
@@ -545,7 +548,8 @@ class Application(Frame):
             if not(fnmatch.filter(
                     itertools.chain.from_iterable(self.matched), "*" + s)):
                 self.matched.append(fnmatch.filter(self.pickles, "*" + s))
-            plotname = string.replace(f, '.pkl', '.xplt')
+            plotname = f.replace('.pkl', '.xplt')
+            print("\n... Analyzing results for {:s}".format(plotname))
 
             results = febio.FebPlt(plotname)
             stress = np.zeros((len(self.data[f]['elements']), 3, 3), float)
@@ -554,7 +558,7 @@ class Application(Frame):
             mvolumes = np.zeros(len(self.data[f]['elements']), float)
             #spatial element volumes
             svolumes = np.copy(mvolumes)
-            nnodes = len(results.NodeData.keys())
+            nnodes = len(list(results.NodeData.keys()))
             displacement = np.zeros((nnodes, 3))
             for j, n in enumerate(self.data[f]['nodes']):
                 tmp = results.NodeData[j + 1]['displacement'][-1, :]
@@ -572,7 +576,7 @@ class Application(Frame):
                 X = np.zeros((4, 3), float)
                 #spatial coordinates
                 x = np.zeros((4, 3), float)
-                for k in xrange(4):
+                for k in range(4):
                     X[k, :] = self.data[f]['nodes'][e[k] - 1]
                     x[k, :] = (X[k, :] +
                                results.NodeData[e[k]]['displacement'][-1, :])
@@ -585,8 +589,8 @@ class Application(Frame):
                     w[k, :] = x[c[1], :] - x[c[0], :]
                 dX = np.zeros((6, 6), float)
                 ds = np.zeros((6, 1), float)
-                for k in xrange(6):
-                    for l in xrange(3):
+                for k in range(6):
+                    for l in range(3):
                         dX[k, l] = 2 * W[k, l] ** 2
                     dX[k, 3] = 4 * W[k, 0] * W[k, 1]
                     dX[k, 4] = 4 * W[k, 1] * W[k, 2]
@@ -596,10 +600,10 @@ class Application(Frame):
                 #solve for strain
                 E = np.linalg.solve(dX, ds)
                 #get volumes
-                mvolumes[j] = np.abs(
-                    np.dot(W[0, :], np.cross(W[1, :], W[2, :]))) / 6.0
-                svolumes[j] = np.abs(
-                    np.dot(w[0, :], np.cross(w[1, :], w[2, :]))) / 6.0
+                mvolumes[j] = old_div(np.abs(
+                    np.dot(W[0, :], np.cross(W[1, :], W[2, :]))), 6.0)
+                svolumes[j] = old_div(np.abs(
+                    np.dot(w[0, :], np.cross(w[1, :], w[2, :]))), 6.0)
                 strain[j, :, :] = [[E[0], E[3], E[5]],
                                    [E[3], E[1], E[4]],
                                    [E[5], E[4], E[2]]]
@@ -626,10 +630,10 @@ class Application(Frame):
             #save reference volumes
             self.volumes.update({f: mvolumes})
             self.results['Effective Strain (von Mises)'].update(
-                {f: np.sqrt(((pstrain[:, 2] - pstrain[:, 1]) ** 2 +
+                {f: np.sqrt(old_div(((pstrain[:, 2] - pstrain[:, 1]) ** 2 +
                              (pstrain[:, 1] - pstrain[:, 0]) ** 2 +
-                             (pstrain[:, 2] - pstrain[:, 0]) ** 2) /
-                            2.0)})
+                             (pstrain[:, 2] - pstrain[:, 0]) ** 2),
+                            2.0))})
             self.results['Maximum Compressive Strain'].update(
                 {f: np.outer(pstrain[:, 0], [1 , 1, 1]) * pstraindir[:, :, 0]})
             self.results['Maximum Tensile Strain'].update(
@@ -637,12 +641,12 @@ class Application(Frame):
             self.results['Maximum Shear Strain'].update(
                 {f: 0.5 * (pstrain[:, 2] - pstrain[:, 0])})
             self.results['Volumetric Strain'].update(
-                {f: svolumes / mvolumes - 1.0})
+                {f: old_div(svolumes, mvolumes) - 1.0})
 
             self.results['Effective Stress (von Mises)'].update(
-                {f: np.sqrt(((pstress[:, 2] - pstress[:, 1]) ** 2 +
+                {f: np.sqrt(old_div(((pstress[:, 2] - pstress[:, 1]) ** 2 +
                              (pstress[:, 1] - pstress[:, 0]) ** 2 +
-                             (pstress[:, 2] - pstress[:, 0]) ** 2) / 2.0)})
+                             (pstress[:, 2] - pstress[:, 0]) ** 2), 2.0))})
             self.results['Maximum Compressive Stress'].update(
                 {f: np.outer(pstress[:, 0], [1 , 1, 1]) * pstressdir[:, :, 0]})
             self.results['Maximum Tensile Stress'].update(
@@ -650,14 +654,14 @@ class Application(Frame):
             self.results['Maximum Shear Stress'].update(
                 {f: 0.5 * (pstress[:, 2] - pstress[:, 0])})
             self.results['Pressure'].update(
-                {f: np.sum(pstress, axis=1) / 3.0})
+                {f: old_div(np.sum(pstress, axis=1), 3.0)})
 
             self.results['Displacement'].update({f: displacement})
 
         for i, k in enumerate(self.outputs.keys()):
             if self.outputs[k].get():
                 for m in self.matched:
-                    weights = self.volumes[m[0]] / np.sum(self.volumes[m[0]])
+                    weights = old_div(self.volumes[m[0]], np.sum(self.volumes[m[0]]))
                     for j, f in enumerate(m):
                         if len(self.results[k][f].shape) > 1:
                             dat = np.ravel(np.linalg.norm(self.results[k][f], axis=1))
@@ -665,8 +669,8 @@ class Application(Frame):
                             dat = np.ravel(self.results[k][f])
                         if self.analysis['Generate Histograms'].get():
                             IQR = np.subtract(*np.percentile(dat, [75, 25]))
-                            nbins = (int(np.ptp(dat) /
-                                         (2 * IQR * dat.size ** (-1. / 3.))))
+                            nbins = (int(old_div(np.ptp(dat),
+                                         (2 * IQR * dat.size ** (old_div(-1., 3.))))))
                             h = histogram(dat, numbins=nbins, weights=weights)
                             bins = np.linspace(h[1], h[1] + h[2] * nbins,
                                                nbins, endpoint=False)
@@ -693,6 +697,7 @@ class Application(Frame):
                             self.differences[k][c[1] + "MINUS" + c[0]] = {
                                 'difference': difference, 'weighted RMS': wrms}
         self.saveResults()
+        print("... ... Analysis Complete")
 
     def saveResults(self):
         top_dir = self.pickles[0].rsplit(os.sep, 2)[0]
@@ -700,7 +705,7 @@ class Application(Frame):
             time.time()).strftime("%Y-%m-%d_%H-%M-%S")
         output_dir = os.sep.join([top_dir, "FEA_analysis_" + ts])
         os.mkdir(output_dir)
-        for output in self.histograms.keys():
+        for output in list(self.histograms.keys()):
             if self.histograms[output] and self.analysis["Generate Histograms"].get():
                 try:
                     os.mkdir(os.sep.join([output_dir, "histograms"]))
@@ -717,27 +722,24 @@ class Application(Frame):
                                self.histograms[output][f]['heights'],
                                self.histograms[output][f]['width'],
                                label=trunc_name[1])
-                    object_name = string.replace(trunc_name[2],
-                                                 "cellFEA", "Cell ")
-                    object_name = string.replace(object_name, ".pkl", "")
+                    object_name = trunc_name[2].replace("cellFEA", "Cell ")
+                    object_name = object_name.replace(".pkl", "")
                     ax.set_title(output + ' ' + object_name)
+                    cell_directory = os.path.join(output_dir, "histograms", object_name.replace(" ", "_"))
                     try:
-                        cell_directory = os.sep.join(
-                            [output_dir, "histograms",
-                             string.replace(object_name, " ", "_")])
                         os.mkdir(cell_directory)
                     except:
                         pass
                     fig.savefig(
-                        os.sep.join([cell_directory, string.replace(
-                            output, " ", "_") + ".svg"]), bbox_inches='tight')
+                        os.path.join(cell_directory,
+                                     output.replace(" ", "_") + ".svg"), bbox_inches='tight')
                     fig.clear()
                     del fig
 
-        for output in self.boxwhiskers.keys():
+        for output in list(self.boxwhiskers.keys()):
             if self.boxwhiskers[output] and self.analysis["Tukey Boxplots"].get():
                 try:
-                    os.mkdir(os.sep.join([output_dir, "boxplots"]))
+                    os.mkdir(os.path.join(output_dir, "boxplots"))
                 except:
                     pass
                 for m in self.matched:
@@ -754,10 +756,9 @@ class Application(Frame):
                         labels.append(trunc_name[1])
                     q = np.array(q)
                     a = ax.boxplot(x)
-                    object_name = string.replace(trunc_name[2],
-                                                 "cellFEA", "Cell ")
-                    object_name = string.replace(object_name, ".pkl", "")
-                    for i in xrange(q.shape[0]):
+                    object_name = trunc_name[2].replace("cellFEA", "Cell ")
+                    object_name = object_name.replace(".pkl", "")
+                    for i in range(q.shape[0]):
                         a['medians'][i].set_ydata(q[i, 1])
                         a['boxes'][i]._xy[[0, 1, 4], 1] = q[i, 0]
                         a['boxes'][i]._xy[[2, 3], 1] = q[i, 2]
@@ -778,26 +779,24 @@ class Application(Frame):
                         a['fliers'][2 * i].set_ydata(fliers)
                         a['fliers'][2 * i].set_xdata([i + 1] * fliers.size)
 
-                    object_name = string.replace(
-                        trunc_name[2], "cellFEA", "Cell ")
-                    object_name = string.replace(object_name, ".pkl", "")
+                    object_name = trunc_name[2].replace("cellFEA", "Cell ")
+                    object_name = object_name.replace(".pkl", "")
                     ax.set_title(object_name)
                     ax.set_ylabel(output)
                     ax.set_xticklabels(labels, rotation=45)
+                    cell_directory = os.path.join(output_dir, "boxplots",
+                            object_name.replace(" ", "_"))
                     try:
-                        cell_directory = os.sep.join(
-                            [output_dir, "boxplots",
-                             string.replace(object_name, " ", "_")])
                         os.mkdir(cell_directory)
                     except:
                         pass
                     fig.savefig(
-                        os.sep.join([cell_directory, string.replace(
-                            output, " ", "_") + ".svg"]), bbox_inches="tight")
+                        os.path.join(cell_directory,
+                                     output.replace(" ", "_") + ".svg"), bbox_inches="tight")
                     fig.clear()
                     del fig
 
-        for output in self.differences.keys():
+        for output in list(self.differences.keys()):
             if self.differences[output] and self.analysis["Calculate Differences"].get():
                 try:
                     os.mkdir(os.sep.join([output_dir, "paired_differences"]))
@@ -811,7 +810,7 @@ class Application(Frame):
                     N = len(m)
                     grid = np.zeros((N, N), float)
                     combos = list(itertools.combinations(m, 2))
-                    enum_combos = list(itertools.combinations(range(N), 2))
+                    enum_combos = list(itertools.combinations(list(range(N)), 2))
                     for c, e in zip(combos, enum_combos):
                         grid[e[0], e[1]] = (self.differences[output]
                                             ["".join([c[1], 'MINUS', c[0]])]
@@ -835,26 +834,25 @@ class Application(Frame):
                     ax.set_yticklabels(labels, minor=False)
                     fig.colorbar(heatmap)
 
-                    object_name = string.replace(
-                        trunc_name[2], "cellFEA", "Cell ")
-                    object_name = string.replace(object_name, ".pkl", "")
+                    object_name = trunc_name[2].replace("cellFEA", "Cell ")
+                    object_name = object_name.replace(".pkl", "")
                     ax.set_title(object_name, y=1.08)
+                    cell_directory = os.path.join(
+                        output_dir, "paired_differences",
+                        object_name.replace(" ", "_"))
                     try:
-                        cell_directory = os.sep.join(
-                            [output_dir, "paired_differences",
-                             string.replace(object_name, " ", "_")])
                         os.mkdir(cell_directory)
                     except:
                         pass
                     fig.savefig(
-                        os.sep.join([cell_directory, string.replace(
-                            output, " ", "_") + ".svg"]), bbox_inches="tight")
+                        os.path.join(cell_directory, output.replace(
+                            " ", "_") + ".svg"), bbox_inches="tight")
                     fig.clear()
                     del fig
 
         if self.analysis['Convert to VTK'].get():
             try:
-                os.mkdir(os.sep.join([output_dir, "vtk"]))
+                os.mkdir(os.path.join(output_dir, "vtk"))
             except:
                 pass
             for m in self.matched:
@@ -862,7 +860,7 @@ class Application(Frame):
                     self.vtkMeshes[m[0]]
                 except:
                     self.makeVTK(m[0])
-                for output in self.outputs.keys():
+                for output in list(self.outputs.keys()):
                     if self.outputs[output].get():
                         for f in m:
                             trunc_name = f.rsplit(os.sep, 2)
@@ -875,7 +873,7 @@ class Application(Frame):
                             elif len(shape) == 1:
                                 vtkArray.SetNumberOfComponents(1)
                             else:
-                                print("WARNING: {:s} has rank {:d}".format(f, len(shape)))
+                                print(("WARNING: {:s} has rank {:d}".format(f, len(shape))))
                                 continue
                             vtkArray.SetName(trunc_name[1] + ' ' + output)
                             self.vtkMeshes[m[0]].GetCellData().AddArray(
@@ -887,11 +885,10 @@ class Application(Frame):
                     arr.SetNumberOfComponents(3)
                     self.vtkMeshes[m[0]].GetPointData().AddArray(arr)
 
-                object_name = string.replace(trunc_name[2], "cellFEA", "Cell")
-                object_name = string.replace(object_name, ".pkl", ".vtu")
+                object_name = trunc_name[2].replace("cellFEA", "Cell")
+                object_name = object_name.replace(".pkl", ".vtu")
                 idWriter = vtk.vtkXMLUnstructuredGridWriter()
-                idWriter.SetFileName(
-                    string.join([output_dir, 'vtk', object_name], os.sep))
+                idWriter.SetFileName(os.path.join(output_dir, 'vtk', object_name))
                 idWriter.SetInputData(self.vtkMeshes[m[0]])
                 idWriter.Write()
 
@@ -913,7 +910,7 @@ class Application(Frame):
         arr = numpy_support.numpy_to_vtk(e.ravel(), deep=True,
                                          array_type=vtk.VTK_ID_TYPE)
         tet = vtk.vtkCellArray()
-        tet.SetCells(e.size / 5, arr)
+        tet.SetCells(old_div(e.size, 5), arr)
         vtkMesh.SetCells(10, tet)
 
         centroids = (n[e[:, 1]] + n[e[:, 2]] + n[e[:, 3]] + n[e[:, 4]])
@@ -943,13 +940,13 @@ class Application(Frame):
 
         N = self.vtkMeshes[filename].GetCellData().GetArray(
             "Centroids").GetNumberOfTuples()
-        for i in xrange(N):
+        for i in range(N):
             g = np.zeros(3, np.float32)
             p = self.vtkMeshes[filename].GetCellData().GetArray(
                 "Centroids").GetTuple3(i)
             d = distanceFilter.EvaluateFunction(p)
             distanceFilter.EvaluateGradient(p, g)
-            g = np.array(g) / np.linalg.norm(np.array(g))
+            g = old_div(np.array(g), np.linalg.norm(np.array(g)))
             gradients.InsertNextTuple(g)
             distances.InsertNextValue(d)
         self.vtkMeshes[filename].GetCellData().AddArray(gradients)

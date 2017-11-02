@@ -1,3 +1,9 @@
+from __future__ import print_function
+from __future__ import division
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import vtk
 import os
 import pickle
@@ -148,7 +154,7 @@ class CellMech(object):
                     .format(i))), 'wb')
                 pickle.dump(fea, fid)
                 fid.close()
-        print("Analysis of {:s} completed...".format(self._def_dir))
+        print(("Analysis of {:s} completed...".format(self._def_dir)))
 
     def _readstls(self):
         """
@@ -172,7 +178,7 @@ class CellMech(object):
                 massProps = vtk.vtkMassProperties()
                 massProps.SetInputData(self.rsurfs[-1])
                 massProps.Update()
-                print("Generating tetrahedral mesh from {:s}".format(fname))
+                print(("Generating tetrahedral mesh from {:s}".format(fname)))
                 self._make3Dmesh(
                     str(os.path.normpath(self._ref_dir + os.sep + fname)),
                     'MATERIAL', massProps.GetVolume())
@@ -190,7 +196,7 @@ class CellMech(object):
                 massProps = vtk.vtkMassProperties()
                 massProps.SetInputData(self.dsurfs[-1])
                 massProps.Update()
-                print("Generating tetrahedral mesh from {:s}".format(fname))
+                print(("Generating tetrahedral mesh from {:s}".format(fname)))
                 self._make3Dmesh(
                     str(os.path.normpath(self._def_dir + os.sep + fname)),
                     'SPATIAL', massProps.GetVolume())
@@ -215,9 +221,9 @@ class CellMech(object):
         -------
         cell_strains
         """
-        for i in xrange(len(self.rcentroids)):
+        for i in range(len(self.rcentroids)):
             # volumetric strains
-            self.vstrains.append(self.dvols[i] / self.rvols[i] - 1)
+            self.vstrains.append(old_div(self.dvols[i], self.rvols[i]) - 1)
 
             ICP = vtk.vtkIterativeClosestPointTransform()
             rcopy = vtk.vtkPolyData()
@@ -253,8 +259,8 @@ class CellMech(object):
                 ICP.Update()
 
             F = np.zeros((3, 3), float)
-            for j in xrange(3):
-                for k in xrange(3):
+            for j in range(3):
+                for k in range(3):
                     F[j, k] = ICP.GetMatrix().GetElement(j, k)
             E = 0.5 * (np.dot(F.T, F) - np.eye(3))
             self.cell_strains.append(E)
@@ -269,8 +275,8 @@ class CellMech(object):
         cell_fields
         """
         for r, mesh in enumerate(self.rmeshes):
-            print("Performing deformable image registration for object {:d}"
-                  .format(r + 1))
+            print(("Performing deformable image registration for object {:d}"
+                  .format(r + 1)))
             rimg, dimg, rpoly = self._poly2img(r)
             origin = rimg.GetOrigin()
             rimg.SetOrigin((0, 0, 0))
@@ -293,10 +299,10 @@ class CellMech(object):
             register.SetMaximumUpdateStepLength(steplength)
             register.SetUseGradientType(0)
             disp_field = register.Execute(rimg, dimg)
-            print("...Elapsed iterations: {:d}"
-                  .format(register.GetElapsedIterations()))
-            print("...Change in RMS error: {:6.3f}"
-                  .format(register.GetRMSChange()))
+            print(("...Elapsed iterations: {:d}"
+                  .format(register.GetElapsedIterations())))
+            print(("...Change in RMS error: {:6.3f}"
+                  .format(register.GetRMSChange())))
 
             disp_field.SetOrigin(origin)
 
@@ -411,7 +417,7 @@ class CellMech(object):
         idlist = tet.GetOutput().GetCell(btet).GetPointIds()
         P = np.zeros((4, 3), float)
         p = np.zeros((4, 3), float)
-        for i in xrange(idlist.GetNumberOfIds()):
+        for i in range(idlist.GetNumberOfIds()):
             P[i, :] = rc[idlist.GetId(i), :]
             p[i, :] = dc[idlist.GetId(i), :]
         X = np.array([P[1, :] - P[0, :],
@@ -431,7 +437,7 @@ class CellMech(object):
         #assemble the system
         dX = np.zeros((6, 6), float)
         ds = np.zeros((6, 1), float)
-        for i in xrange(6):
+        for i in range(6):
             dX[i, 0] = 2 * X[i, 0] ** 2
             dX[i, 1] = 2 * X[i, 1] ** 2
             dX[i, 2] = 2 * X[i, 2] ** 2
@@ -476,7 +482,7 @@ class CellMech(object):
             * daxes
         """
         vConst /= 50000.0
-        edgeSize = (vConst*12/np.sqrt(2)) ** (1./3.)
+        edgeSize = (vConst*12/np.sqrt(2)) ** (old_div(1.,3.))
         m = mesh.Mesher(inputname=filename,
                         outputname="tmp.vtu",
                         facetAngle=30.0,
@@ -499,12 +505,12 @@ class CellMech(object):
         n2 = nodes[elements[:, 1], :]
         n3 = nodes[elements[:, 2], :]
         n4 = nodes[elements[:, 3], :]
-        tetraCents = (n1 + n2 + n3 + n4) / 4.0
+        tetraCents = old_div((n1 + n2 + n3 + n4), 4.0)
         e1 = n4 - n1
         e2 = n3 - n1
         e3 = n2 - n1
-        tetraVols = np.einsum('...j,...j',
-                              e1, np.cross(e2, e3, axis=1)) / 6.0
+        tetraVols = old_div(np.einsum('...j,...j',
+                              e1, np.cross(e2, e3, axis=1)), 6.0)
         tetraVols = np.abs(tetraVols.ravel())
 
         totalVol = np.sum(tetraVols)
@@ -559,7 +565,7 @@ class CellMech(object):
         -------
             (Reference Image, Deformed Image, Tranformed Reference Surface)
         """
-        dim = int(np.ceil(1.0 / self.deformableSettings['Precision'])) + 10
+        dim = int(np.ceil(old_div(1.0, self.deformableSettings['Precision']))) + 10
         rpoly = vtk.vtkPolyData()
         rpoly.DeepCopy(self.rsurfs[ind])
         dpoly = self.dsurfs[ind]
@@ -577,15 +583,15 @@ class CellMech(object):
         dpoly.GetBounds(dbounds)
 
         spacing = np.zeros(3, np.float32)
-        for i in xrange(3):
+        for i in range(3):
             rspan = rbounds[2 * i + 1] - rbounds[2 * i]
             dspan = dbounds[2 * i + 1] - dbounds[2 * i]
             spacing[i] = (np.max([rspan, dspan])
                           * self.deformableSettings['Precision'])
 
         imgs = []
-        half = float(dim) / 2.0
-        for i in xrange(2):
+        half = old_div(float(dim), 2.0)
+        for i in range(2):
             arr = np.ones((dim, dim, dim), np.uint8)
             arr2img = vti.vtkImageImportFromArray()
             arr2img.SetDataSpacing(spacing)
@@ -595,19 +601,19 @@ class CellMech(object):
             if i == 0:
                 rimg = arr2img.GetOutput()
                 rimg.SetOrigin((np.mean(rbounds[0:2]) -
-                                half * spacing[0] + spacing[0] / 2,
+                                half * spacing[0] + old_div(spacing[0], 2),
                                 np.mean(rbounds[2:4]) -
-                                half * spacing[1] + spacing[1] / 2,
+                                half * spacing[1] + old_div(spacing[1], 2),
                                 np.mean(rbounds[4:]) -
-                                half * spacing[2] + spacing[2] / 2))
+                                half * spacing[2] + old_div(spacing[2], 2)))
             else:
                 dimg = arr2img.GetOutput()
                 dimg.SetOrigin((np.mean(dbounds[0:2]) -
-                                half * spacing[0] + spacing[0] / 2,
+                                half * spacing[0] + old_div(spacing[0], 2),
                                 np.mean(dbounds[2:4]) -
-                                half * spacing[1] + spacing[1] / 2,
+                                half * spacing[1] + old_div(spacing[1], 2),
                                 np.mean(dbounds[4:]) -
-                                half * spacing[2] + spacing[2] / 2))
+                                half * spacing[2] + old_div(spacing[2], 2)))
         imgs = []
         for (pd, img) in [(rpoly, rimg), (dpoly, dimg)]:
             pol2stenc = vtk.vtkPolyDataToImageStencil()
@@ -652,7 +658,7 @@ class CellMech(object):
         """
         pd.GetPointData().SetActiveVectors("Displacement")
 
-        class vtkTimerCallback():
+        class vtkTimerCallback(object):
             def __init__(self):
                 self.timer_count = 0
 
@@ -726,7 +732,7 @@ class CellMech(object):
             def Keypress(self, obj, event):
                 self.key = obj.GetKeySym()
                 if self.key == "Right" or self.key == "Up":
-                    for i in xrange(10):
+                    for i in range(10):
                         obj.CreateOneShotTimer(1)
 
         renwin = vtk.vtkRenderWindow()
@@ -775,7 +781,7 @@ class CellMech(object):
         bounds[1] = bounds[0] + length
         bounds[3] = bounds[2] + length
         bounds[5] = bounds[4] + length
-        for j in xrange(4):
+        for j in range(4):
             mapper = vtk.vtkPolyDataMapper()
             mapper.SetInputData(scalars[j])
             mapper.SetScalarRange(scalars[j].GetScalarRange())

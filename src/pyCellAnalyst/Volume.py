@@ -1,3 +1,9 @@
+from __future__ import print_function
+from __future__ import division
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import os
 import re
 import string
@@ -266,10 +272,10 @@ class Volume(object):
                         os.path.normpath(self._vol_dir + os.sep + fname))
                     img.append(sitk.ReadImage(filename, sitk.sitkFloat32))
                 self._img = sitk.RescaleIntensity(sitk.JoinSeries(img), 0.0, 1.0)
-                print("\nImported 3D image stack ranging from {:s} to {:s}"
-                      .format(files[0], files[-1]))
+                print(("\nImported 3D image stack ranging from {:s} to {:s}"
+                      .format(files[0], files[-1])))
             else:
-                print("\nImported 2D image {:s}".format(files[0]))
+                print(("\nImported 2D image {:s}".format(files[0])))
                 filename = str(
                     os.path.normpath(self._vol_dir + os.sep + files[0]))
                 self._img = sitk.RescaleIntensity(sitk.ReadImage(filename, sitk.sitkFloat32), 0.0, 1.0)
@@ -288,7 +294,7 @@ class Volume(object):
             pass
         elif self.smoothing_method == 'Gaussian':
             parameters = {'sigma': 0.5}
-            for p in self.smoothing_parameters.keys():
+            for p in list(self.smoothing_parameters.keys()):
                 try:
                     parameters[p] = self.smoothing_parameters[p]
                 except:
@@ -298,7 +304,7 @@ class Volume(object):
 
         elif self.smoothing_method == 'Median':
             parameters = {'radius': (1, 1, 1)}
-            for p in self.smoothing_parameters.keys():
+            for p in list(self.smoothing_parameters.keys()):
                 try:
                     parameters[p] = self.smoothing_parameters[p]
                 except:
@@ -308,7 +314,7 @@ class Volume(object):
 
         elif self.smoothing_method == 'Curvature Diffusion':
             parameters = {'iterations': 10, 'conductance': 9}
-            for p in self.smoothing_parameters.keys():
+            for p in list(self.smoothing_parameters.keys()):
                 try:
                     parameters[p] = self.smoothing_parameters[p]
                 except:
@@ -324,7 +330,7 @@ class Volume(object):
             parameters = {'iterations': 10,
                           'conductance': 9,
                           'time step': 0.01}
-            for p in self.smoothing_parameters.keys():
+            for p in list(self.smoothing_parameters.keys()):
                 try:
                     parameters[p] = self.smoothing_parameters[p]
                 except:
@@ -340,7 +346,7 @@ class Volume(object):
             parameters = {'domainSigma': 1.5,
                           'rangeSigma': 10.0,
                           'samples': 100}
-            for p in self.smoothing_parameters.keys():
+            for p in list(self.smoothing_parameters.keys()):
                 try:
                     parameters[p] = self.smoothing_parameters[p]
                 except:
@@ -362,7 +368,7 @@ class Volume(object):
                             'gaussian': 1,
                             'rician': 2,
                             'poisson': 3}
-            for p in self.smoothing_parameters.keys():
+            for p in list(self.smoothing_parameters.keys()):
                 try:
                     if p == 'noise model':
                         parameters[p] = noise_models[
@@ -501,7 +507,7 @@ class Volume(object):
                 simg = self.smoothRegion(roi)
 
             print("\n------------------")
-            print("Segmenting Cell {:d}".format(i + 1))
+            print(("Segmenting Cell {:d}".format(i + 1)))
             print("------------------\n")
 
             if method == 'Percentage':
@@ -567,8 +573,8 @@ class Volume(object):
                 else:
                     seg = thres.Execute(simg)
                     t = thres.GetThreshold()
-                    print("... Threshold determined by {:s} method: {:6.5f}"
-                          .format(method, t))
+                    print(("... Threshold determined by {:s} method: {:6.5f}"
+                          .format(method, t)))
 
             if adaptive and not(self.two_dim):
                 newt = float(np.copy(t))
@@ -587,7 +593,7 @@ class Volume(object):
                     r = sitk.ConnectedComponent(seg)
                     labelstats = self._getLabelShape(r)
                     d = 1e7
-                    region_cent = np.array(list(seg.GetSize()), float) / 2.0
+                    region_cent = old_div(np.array(list(seg.GetSize()), float), 2.0)
                     region_cent *= np.array(self._pixel_dim)
                     region_cent += np.array(list(seg.GetOrigin()), float)
                     for l, c in enumerate(labelstats['centroid']):
@@ -626,7 +632,7 @@ class Volume(object):
                 r = sitk.ConnectedComponent(seg)
                 labelstats = self._getLabelShape(r)
                 d = 1e7
-                region_cent = np.array(list(seg.GetSize()), float) / 2.0
+                region_cent = old_div(np.array(list(seg.GetSize()), float), 2.0)
                 region_cent *= np.array(self._pixel_dim)
                 region_cent += np.array(list(seg.GetOrigin()), float)
                 for l, c in enumerate(labelstats['centroid']):
@@ -734,8 +740,8 @@ class Volume(object):
         newcells.CopyInformation(self.cells)
         for i, region in enumerate(self._regions):
             print("\n-------------------------------------------")
-            print("Evolving Geodesic Active Contour for Cell {:d}"
-                  .format(i + 1))
+            print(("Evolving Geodesic Active Contour for Cell {:d}"
+                  .format(i + 1)))
             print("-------------------------------------------")
             if dimension == 3:
                 seed = sitk.RegionOfInterest(self.cells,
@@ -744,16 +750,15 @@ class Volume(object):
                 roi = self.smoothed[i]
                 #resample the Region of Interest to improve resolution of
                 #derivatives and give closer to isotropic voxels
-                zratio = self._pixel_dim[2] / self._pixel_dim[0]
+                zratio = old_div(self._pixel_dim[2], self._pixel_dim[0])
                 #adjust size in z to be close to isotropic and double
                 #the resolution
                 newz = int(zratio * roi.GetSize()[2]) * upsampling
-                newzspace = (float(roi.GetSize()[2])
-                             / float(newz)) * self._pixel_dim[2]
+                newzspace = (old_div(float(roi.GetSize()[2]), float(newz))) * self._pixel_dim[2]
                 newx = roi.GetSize()[0] * upsampling
-                newxspace = self._pixel_dim[0] / float(upsampling)
+                newxspace = old_div(self._pixel_dim[0], float(upsampling))
                 newy = roi.GetSize()[1] * upsampling
-                newyspace = self._pixel_dim[1] / float(upsampling)
+                newyspace = old_div(self._pixel_dim[1], float(upsampling))
                 #Do the resampling
                 refine = sitk.ResampleImageFilter()
                 refine.SetInterpolator(sitk.sitkBSpline)
@@ -770,9 +775,9 @@ class Volume(object):
                 #resample the Region of Interest to improve resolution
                 #of derivatives
                 newx = roi.GetSize()[0] * upsampling
-                newxspace = self._pixel_dim[0] / float(upsampling)
+                newxspace = old_div(self._pixel_dim[0], float(upsampling))
                 newy = roi.GetSize()[1] * upsampling
-                newyspace = self._pixel_dim[1] / float(upsampling)
+                newyspace = old_div(self._pixel_dim[1], float(upsampling))
                 #Do the resampling
                 refine = sitk.ResampleImageFilter()
                 refine.SetInterpolator(sitk.sitkBSpline)
@@ -846,17 +851,17 @@ class Volume(object):
                                                  squaredDistance=False,
                                                  useImageSpacing=True)
                 gd = sitk.GeodesicActiveContourLevelSetImageFilter()
-                gd.SetMaximumRMSError(rms / float(upsampling))
+                gd.SetMaximumRMSError(old_div(rms, float(upsampling)))
                 gd.SetNumberOfIterations(active_iterations)
                 gd.SetPropagationScaling(propagation)
                 gd.SetCurvatureScaling(curvature)
                 gd.SetAdvectionScaling(advection)
                 seg = gd.Execute(d, canny)
                 print("... Geodesic Active Contour Segmentation Completed")
-                print("... ... Elapsed Iterations: {:d}"
-                      .format(gd.GetElapsedIterations()))
-                print("... ... Change in RMS Error: {:.3e}"
-                      .format(gd.GetRMSChange()))
+                print(("... ... Elapsed Iterations: {:d}"
+                      .format(gd.GetElapsedIterations())))
+                print(("... ... Change in RMS Error: {:.3e}"
+                      .format(gd.GetRMSChange())))
 
             self.levelsets.append(seg)
             seg = sitk.BinaryThreshold(seg, -1e7, 0) * (i + 1)
@@ -924,8 +929,8 @@ class Volume(object):
         newcells.CopyInformation(self.cells)
         for i, region in enumerate(self._regions):
             print("\n-------------------------------------------")
-            print("Evolving Edge-free Active Contour for Cell {:d}"
-                  .format(i + 1))
+            print(("Evolving Edge-free Active Contour for Cell {:d}"
+                  .format(i + 1)))
             print("-------------------------------------------")
             if dimension == 3:
                 seed = sitk.RegionOfInterest(self.cells,
@@ -934,16 +939,15 @@ class Volume(object):
                 roi = self.smoothed[i]
                 #resample the Region of Interest to improve resolution
                 #of derivatives and give closer to isotropic voxels
-                zratio = self._pixel_dim[2] / self._pixel_dim[0]
+                zratio = old_div(self._pixel_dim[2], self._pixel_dim[0])
                 #adjust size in z to be close to isotropic and
                 #double the resolution
                 newz = int(zratio * roi.GetSize()[2]) * upsampling
-                newzspace = (float(roi.GetSize()[2])
-                             / float(newz)) * self._pixel_dim[2]
+                newzspace = (old_div(float(roi.GetSize()[2]), float(newz))) * self._pixel_dim[2]
                 newx = roi.GetSize()[0] * upsampling
-                newxspace = self._pixel_dim[0] / float(upsampling)
+                newxspace = old_div(self._pixel_dim[0], float(upsampling))
                 newy = roi.GetSize()[1] * upsampling
-                newyspace = self._pixel_dim[1] / float(upsampling)
+                newyspace = old_div(self._pixel_dim[1], float(upsampling))
                 #Do the resampling
                 refine = sitk.ResampleImageFilter()
                 refine.SetInterpolator(sitk.sitkBSpline)
@@ -960,9 +964,9 @@ class Volume(object):
                 #resample the Region of Interest to improve resolution
                 #of derivatives
                 newx = roi.GetSize()[0] * upsampling
-                newxspace = self._pixel_dim[0] / float(upsampling)
+                newxspace = old_div(self._pixel_dim[0], float(upsampling))
                 newy = roi.GetSize()[1] * upsampling
-                newyspace = self._pixel_dim[1] / float(upsampling)
+                newyspace = old_div(self._pixel_dim[1], float(upsampling))
                 #Do the resampling
                 refine = sitk.ResampleImageFilter()
                 refine.SetInterpolator(sitk.sitkBSpline)
@@ -1003,7 +1007,7 @@ class Volume(object):
             if self.two_dim and dimension == 3:
                 stack = []
                 size = simg.GetSize()
-                for sl in xrange(size[2]):
+                for sl in range(size[2]):
                     im = sitk.Extract(simg, [size[0], size[1], 0], [0, 0, sl])
                     s = sitk.Extract(seed, [size[0], size[1], 0], [0, 0, sl])
                     phi0 = sitk.SignedMaurerDistanceMap(s,
@@ -1023,10 +1027,10 @@ class Volume(object):
                 seg = cv.Execute(phi0,
                                  sitk.Cast(simg, sitk.sitkFloat32))
                 print("... Edge-free Active Contour Segmentation Completed")
-                print("... ... Elapsed Iterations: {:d}"
-                      .format(cv.GetElapsedIterations()))
-                print("... ... Change in RMS Error: {:.3e}"
-                      .format(cv.GetRMSChange()))
+                print(("... ... Elapsed Iterations: {:d}"
+                      .format(cv.GetElapsedIterations())))
+                print(("... ... Change in RMS Error: {:.3e}"
+                      .format(cv.GetRMSChange())))
 
             self.levelsets.append(seg)
             b = sitk.BinaryThreshold(seg, 1e-7, 1e7)
@@ -1379,7 +1383,7 @@ class Volume(object):
         intensities = []
         size = self._img.GetSize()
         intensities = np.zeros(size[2], np.float32)
-        for sl in xrange(size[2]):
+        for sl in range(size[2]):
             s = sitk.Extract(self._img, [size[0], size[1], 0], [0, 0, sl])
             intensities[sl] = self._getMinMax(s)[1]
             stack.append(s)
@@ -1390,7 +1394,7 @@ class Volume(object):
         w[intensities > high] = 0.0
         x = np.arange(size[2], dtype=np.float32)
         fit = np.polyfit(x, intensities, 1, w=w)
-        ratios = fit[1] / (fit[0] * x + fit[1])
+        ratios = old_div(fit[1], (fit[0] * x + fit[1]))
         for i, s in enumerate(stack):
             stack[i] = sitk.Cast(s, sitk.sitkFloat32) * ratios[i]
         nimg = sitk.JoinSeries(stack)
@@ -1400,7 +1404,7 @@ class Volume(object):
     def smooth2D(self, img):
         stack = []
         size = img.GetSize()
-        for sl in xrange(size[2]):
+        for sl in range(size[2]):
             s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
             stack.append(self.smoothRegion(s))
         simg = sitk.JoinSeries(stack)
@@ -1412,13 +1416,13 @@ class Volume(object):
         values = []
         size = img.GetSize()
         if (thres != "Percentage"):
-            for sl in xrange(size[2]):
+            for sl in range(size[2]):
                 s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
                 seg = thres.Execute(s)
                 stack.append(sitk.BinaryFillhole(seg != 0))
                 values.append(thres.GetThreshold())
         else:
-            for sl in xrange(size[2]):
+            for sl in range(size[2]):
                 s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, sl])
                 t = self._getMinMax(s)[1]
                 t *= ratio
@@ -1437,8 +1441,8 @@ class Volume(object):
         for i, t in enumerate(thresh):
             s = sitk.Extract(img, [size[0], size[1], 0], [0, 0, i])
             # maximum difference from max of 300%
-            if (maxt / t) < 3:
-                stack.append(sitk.Cast(s, sitk.sitkFloat32) * (maxt / t))
+            if (old_div(maxt, t)) < 3:
+                stack.append(sitk.Cast(s, sitk.sitkFloat32) * (old_div(maxt, t)))
             else:
                 stack.append(sitk.Cast(s, sitk.sitkFloat32))
         nimg = sitk.JoinSeries(stack)
@@ -1454,14 +1458,14 @@ class Volume(object):
         on each slice in the 3-D stack independently.
         """
         gd = sitk.GeodesicActiveContourLevelSetImageFilter()
-        gd.SetMaximumRMSError(rms / float(upsampling))
+        gd.SetMaximumRMSError(old_div(rms, float(upsampling)))
         gd.SetNumberOfIterations(active_iterations)
         gd.SetPropagationScaling(propagation)
         gd.SetCurvatureScaling(curvature)
         gd.SetAdvectionScaling(advection)
         stack = []
         size = simg.GetSize()
-        for sl in xrange(size[2]):
+        for sl in range(size[2]):
             im = sitk.Extract(simg, [size[0], size[1], 0], [0, 0, sl])
             s = sitk.Extract(seed, [size[0], size[1], 0], [0, 0, sl])
             canny = sitk.CannyEdgeDetection(
@@ -1485,7 +1489,7 @@ class Volume(object):
                " with diameter half of minimum region of interest edge."))
         size = np.array(seed.GetSize(), int)
         idx = size * np.array(seed.GetSpacing(), float) / 2.0
-        d = np.min(size) / 2
+        d = old_div(np.min(size), 2)
         seed[seed.TransformPhysicalPointToIndex(idx)] = 1
         seed = sitk.BinaryDilate(seed, d)
         return seed

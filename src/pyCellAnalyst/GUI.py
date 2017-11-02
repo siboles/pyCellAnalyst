@@ -1,6 +1,12 @@
-from Tkinter import *
-from ttk import Notebook
-import tkFileDialog
+from __future__ import print_function
+from __future__ import division
+from builtins import zip
+from builtins import range
+from past.utils import old_div
+from tkinter import *
+from tkinter.ttk import Notebook
+import tkinter.filedialog
+
 import os
 import webbrowser
 import pickle
@@ -8,7 +14,6 @@ import copy
 import xlrd
 import time
 import datetime
-import string
 from pyCellAnalyst import (Volume, CellMech)
 import numpy as np
 import matplotlib
@@ -113,7 +118,7 @@ class Application(Frame):
                                  'RenyiEntropy',
                                  'Shanbhag']
 
-        for i in self.settings.keys():
+        for i in list(self.settings.keys()):
             self.settings[i].trace("w", self.update)
         self.grid()
         self.create_widgets()
@@ -994,7 +999,7 @@ class Application(Frame):
                       textvariable=self.settings[v]).pack(anchor=W)
 
     def add_directory(self):
-        dir_name = tkFileDialog.askdirectory(
+        dir_name = tkinter.filedialog.askdirectory(
             parent=root,
             initialdir=self.lastdir,
             title="Select directory containing images.")
@@ -1010,7 +1015,7 @@ class Application(Frame):
                 del self.directories[i]
 
     def add_material_dir(self):
-        dir_name = tkFileDialog.askdirectory(
+        dir_name = tkinter.filedialog.askdirectory(
             parent=root,
             initialdir=self.lastdir,
             title="Select directory containing reference configuration data.")
@@ -1020,7 +1025,7 @@ class Application(Frame):
             self.materialDirectoryLabel["text"] = dir_name
 
     def add_spatial_dir(self):
-        dir_name = tkFileDialog.askdirectory(
+        dir_name = tkinter.filedialog.askdirectory(
             parent=root,
             initialdir=self.lastdir,
             title="Select directory containing reference configuration data.")
@@ -1037,14 +1042,14 @@ class Application(Frame):
                 del self.spatialDirectories[i]
 
     def saveSettings(self):
-        filename = tkFileDialog.asksaveasfilename(defaultextension=".pkl")
+        filename = tkinter.filedialog.asksaveasfilename(defaultextension=".pkl")
         if filename:
             fid = open(filename, 'wb')
             tmp_settings = copy.copy(self.settings)
-            for key in self.settings.keys():
+            for key in list(self.settings.keys()):
                 tmp_settings[key] = self.settings[key].get()
             tmp_int_settings = copy.copy(self.intSettings)
-            for key in self.intSettings.keys():
+            for key in list(self.intSettings.keys()):
                 tmp_int_settings[key] = self.intSettings[key].get()
             values = {"Settings": tmp_settings,
                       "ButtonStates": tmp_int_settings}
@@ -1052,7 +1057,7 @@ class Application(Frame):
             fid.close()
 
     def loadSettings(self):
-        filename = tkFileDialog.askopenfilename(
+        filename = tkinter.filedialog.askopenfilename(
             parent=root,
             initialdir=os.getcwd(),
             title="Select a saved settings file.")
@@ -1064,22 +1069,22 @@ class Application(Frame):
                 try:
                     self.settings[key].set(values['Settings'][key])
                 except:
-                    print(("WARNING: Failed to detect a value for {:s} "
+                    print((("WARNING: Failed to detect a value for {:s} "
                            "in file.\n The settings file was probably saved "
-                           "by a previous version.").format(key))
+                           "by a previous version.").format(key)))
             for key in self.intSettings:
                 try:
                     self.intSettings[key].set(values['ButtonStates'][key])
                 except:
-                    print(("WARNING: Failed to detect a value for {:s} "
+                    print((("WARNING: Failed to detect a value for {:s} "
                            "in file.\n The settings file was probably saved "
-                           "by a previous version.").format(key))
+                           "by a previous version.").format(key)))
         self.populateSmoothingSettings()
         self.populateThresholdSettings()
         self.populateActiveContourSettings()
 
     def loadROI(self):
-        filename = tkFileDialog.askopenfilename(
+        filename = tkinter.filedialog.askopenfilename(
             parent=root,
             initialdir=os.getcwd(),
             title="Select an .xls file containing Regions of Interest.")
@@ -1088,11 +1093,11 @@ class Application(Frame):
             N = wb.nsheets
             #clear any previously loaded regions
             self.ROI = []
-            for i in xrange(N):
+            for i in range(N):
                 self.ROI.append([])
                 s = wb.sheet_by_index(i)
                 #skip the first row
-                for r in xrange(s.nrows - 1):
+                for r in range(s.nrows - 1):
                     v = s.row_values(r + 1, start_colx=1)
                     #even row
                     if r % 2 == 0:
@@ -1106,8 +1111,8 @@ class Application(Frame):
                         tmp[5] = int(v[4]) - tmp[2]
                         self.ROI[i].append(tmp)
         else:
-            print(("{:s} does not have proper extension. Currently supporting"
-                   " only .xls filetypes.").format(filename))
+            print((("{:s} does not have proper extension. Currently supporting"
+                   " only .xls filetypes.").format(filename)))
 
     def run_segmentation(self):
         if not self.directories:
@@ -1287,7 +1292,7 @@ class Application(Frame):
 
             N = len(mech.cell_strains)
             if i == 0 and self.intSettings["makePlots"].get():
-                for j in xrange(N):
+                for j in range(N):
                     self.results[
                         "Cell {:d}".format(j + 1)] = OrderedDict()
             if self.intSettings["makePlots"].get():
@@ -1358,18 +1363,18 @@ class Application(Frame):
 
                 if self.intSettings['makePlots'].get():
                     key = "Cell {:d}".format(j + 1)
-                    self.results[key][shortname]["Height"] = (daxes[0] /
-                                                              raxes[0] - 1)
-                    self.results[key][shortname]["Depth"] = (daxes[1] /
-                                                             raxes[1] - 1)
-                    self.results[key][shortname]["Width"] = (daxes[2] /
-                                                             raxes[2] - 1)
-                    self.aggregate[shortname]["Height"][j] = (daxes[0] /
-                                                              raxes[0] - 1)
-                    self.aggregate[shortname]["Depth"][j] = (daxes[1] /
-                                                             raxes[1] - 1)
-                    self.aggregate[shortname]["Width"][j] = (daxes[2] /
-                                                             raxes[2] - 1)
+                    self.results[key][shortname]["Height"] = (old_div(daxes[0],
+                                                              raxes[0]) - 1)
+                    self.results[key][shortname]["Depth"] = (old_div(daxes[1],
+                                                             raxes[1]) - 1)
+                    self.results[key][shortname]["Width"] = (old_div(daxes[2],
+                                                             raxes[2]) - 1)
+                    self.aggregate[shortname]["Height"][j] = (old_div(daxes[0],
+                                                              raxes[0]) - 1)
+                    self.aggregate[shortname]["Depth"][j] = (old_div(daxes[1],
+                                                             raxes[1]) - 1)
+                    self.aggregate[shortname]["Width"][j] = (old_div(daxes[2],
+                                                             raxes[2]) - 1)
 
         if self.intSettings['makePlots'].get():
             self.makePlots(ts)
@@ -1380,27 +1385,26 @@ class Application(Frame):
     def makePlots(self, ts):
         pardir = os.path.dirname(self.spatialDirectories[0])
         #boxplots of all cells for different cases
-        N = len(self.aggregate.keys())
-        M = len(self.aggregate.values()[0]["Height"])
-        for m in self.aggregate.values()[0].keys():
+        N = len(list(self.aggregate.keys()))
+        M = len(list(self.aggregate.values())[0]["Height"])
+        for m in list(list(self.aggregate.values())[0].keys()):
             data = np.zeros((M, N), float)
             for j, k in enumerate(self.aggregate.keys()):
                 data[:, j] = self.aggregate[k][m]
             fig, ax = plt.subplots()
             ax.boxplot(data)
-            ax.set_xticklabels(self.aggregate.keys())
+            ax.set_xticklabels(list(self.aggregate.keys()))
             ax.set_ylabel(m + " Strain")
-            fig.savefig(string.join([pardir, os.sep, "AllCells_",
-                                     m, "_", ts, ".svg"], ''))
+            fig.savefig(os.path.join(pardir, "AllCells_{:s}_{:s}.svg".format(m, ts)))
 
-        for k in self.results.keys():
-            if not(self.results[k].keys()):
+        for k in list(self.results.keys()):
+            if not(list(self.results[k].keys())):
                 continue
             fig, ax = plt.subplots()
             fig.set_size_inches([3.34646, 3.34646])
-            N = len(self.results[k].keys())
+            N = len(list(self.results[k].keys()))
             ind = np.arange(4)
-            width = 0.8 / float(N)
+            width = old_div(0.8, float(N))
             cm = plt.get_cmap('jet')
             colors = plt.cm.Set3(np.linspace(0, 1, N))
             plt.rcParams.update({'font.size': 8})
@@ -1418,8 +1422,8 @@ class Application(Frame):
             ax.set_xticks(np.arange(4) + 0.4)
             ax.set_xticklabels(['Compression', 'Tension', 'Shear', 'Volume'])
             ax.axhline(y=0.0, color='k')
-            fig.savefig(string.join([pardir, os.sep, "Kinematics_",
-                                     k, "_", ts, ".svg"], ''))
+
+            fig.savefig(os.path.join(pardir, "Kinematics_{:s}_{:s}.svg".format(k, ts)))
             # ellipsoidal approach
             fig2, ax2 = plt.subplots()
             fig2.set_size_inches([3.34646, 3.34646])
@@ -1438,17 +1442,14 @@ class Application(Frame):
             ax2.set_xticks(np.arange(4) + 0.4)
             ax2.set_xticklabels(['Height', 'Width', 'Depth', 'Volume'])
             ax2.axhline(y=0.0, color='k')
-            fig2.savefig(string.join([pardir, os.sep, "Ellipsoidal_",
-                                      k, "_", ts, ".svg"], ''))
+            fig2.savefig(os.path.join(pardir, "Ellipsoidal_{:s}_{:s}.svg".format(k, ts)))
             plt.close('all')
         figLegend1 = plt.figure()
         plt.figlegend(*ax.get_legend_handles_labels(), loc='upper left')
-        figLegend1.savefig(string.join(
-            [pardir, os.sep, "Kinematics_Legend_", ts, ".svg"], ''))
+        figLegend1.savefig(os.path.join(pardir, "Kinematics_Legend_{:s}.svg".format(ts)))
         figLegend2 = plt.figure()
         plt.figlegend(*ax.get_legend_handles_labels(), loc='upper left')
-        figLegend2.savefig(string.join(
-            [pardir, os.sep, "Ellipsoidal_Legend_", ts, ".svg"], ''))
+        figLegend2.savefig(os.path.join(pardir, "Ellipsoidal_Legend_{:s}.svg".format(ts)))
         plt.close('all')
 
     def open_smoothing_reference(self, *args):
