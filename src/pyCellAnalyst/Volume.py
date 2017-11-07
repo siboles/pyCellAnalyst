@@ -410,7 +410,9 @@ class Volume(object):
         if self._stain == "Background":
             img = sitk.InvertIntensity(img)
         # replace border pixel values with average of border slices
-        roi = self._flattenBorder(img)
+        img = self._flattenBorder(img)
+        img = sitk.AdaptiveHistogramEqualization(img, radius=[int(s / 4) for s in img.GetSize()])
+
         return sitk.RescaleIntensity(img, 0.0, 1.0)
 
     def _getMinMax(self, img):
@@ -582,13 +584,15 @@ class Volume(object):
                     region_bnds = [(0, region[3]), (0, region[4])]
                 else:
                     region_bnds = [(0, region[2]), (0, region[3])]
+
+                cnt = 0
                 while True:
                     if self.opening:
                         #Opening (Erosion/Dilation) step to remove islands
                         #smaller than 1 voxels in radius
                         seg = sitk.BinaryMorphologicalOpening(seg, 1)
                     if self.fillholes:
-                        seg = sitk.BinaryFillhole(seg != 0)
+                        seg = sitk.VotingBinaryIterativeHoleFilling(seg)
                     #Get connected regions
                     r = sitk.ConnectedComponent(seg)
                     labelstats = self._getLabelShape(r)
@@ -596,11 +600,24 @@ class Volume(object):
                     region_cent = old_div(np.array(list(seg.GetSize()), float), 2.0)
                     region_cent *= np.array(self._pixel_dim)
                     region_cent += np.array(list(seg.GetOrigin()), float)
-                    for l, c in enumerate(labelstats['centroid']):
-                        dist = np.linalg.norm(np.array(c, float) - region_cent)
-                        if dist < d:
-                            d = dist
-                            label = l + 1
+                    if cnt == 0:
+                        for l, c in enumerate(labelstats['centroid']):
+                            dist = np.linalg.norm(np.array(c, float) - region_cent)
+                            if dist < d:
+                                d = dist
+                                label = l + 1
+                        mask = r==label
+                    else:
+                        tmp = sitk.Mask(r, mask)
+                        sitk.WriteImage(mask, "mask{:d}.nii".format(i+1))
+                        stats = self._getLabelShape(tmp)
+                        try:
+                            label = np.argmax(stats["volume"]) + 1
+                        except:
+                            newt -= 0.001
+                            seg = sitk.BinaryThreshold(simg, newt, 1e7)
+                            break
+                    cnt += 1
                     # if exception here, then threshold adjusted too much
                     # and previous increment will be taken
                     try:
@@ -609,14 +626,10 @@ class Volume(object):
                         break
 
                     if labelstats['border size'][label - 1] > 0:
-                        if t < 0.1:
-                            newt += 0.01 * (t+0.1)
-                        else:
-                            newt += 0.01 * t
+                        newt += 0.001
                         seg = sitk.BinaryThreshold(simg, newt, 1e7)
                     else:
                         break
-
                 if not(newt == t):
                     print(("... ... Adjusted the threshold to: "
                            "{:6.5f}".format(newt)))
@@ -625,7 +638,7 @@ class Volume(object):
                 if self.opening:
                     #Opening (Erosion/Dilation) step to remove islands
                     #smaller than 1 voxels in radius
-                    seg = sitk.BinaryMorphologicalOpening(seg, 1)
+                    seg = sitk.VotingBinaryIterativeHoleFilling(seg)
                 if self.fillholes:
                     seg = sitk.BinaryFillhole(seg != 0)
                 #Get connected regions
@@ -1088,6 +1101,13 @@ class Volume(object):
             print(("... ... ... Please consider using Geodesic or "
                    "EdgeFree options.\n"))
             p1 = np.argwhere(a == (i + 1)) * ind2space
+        if p1.size == 0:
+            print(("... ... ... The seed from thresholding does not contain any voxels. "
+                   "Aborting the SVM to fix overlap."))
+            print("... ... ... Please consider using a different thresholding method.\n")
+
+            return cells
+
         g1 = np.array([i + 1] * p1.shape[0], int)
         labels = np.unique(a)
         b = np.copy(a)
@@ -1104,7 +1124,7 @@ class Volume(object):
             X = np.vstack((p1, p2))
             scaler = preprocessing.StandardScaler().fit(X)
             y = np.hstack((g1, g2))
-            clf = svm.SVC(kernel='rbf', degree=3, gamma=2, class_weight='auto')
+            clf = svm.SVC(kernel='rbf', degree=3, gamma=2)
             clf.fit(scaler.transform(X), y)
             classification = clf.predict(scaler.transform(unknown))
             b[a == l] = classification[0:unknown1.shape[0]]
