@@ -12,7 +12,7 @@ class BinaryDistribution(Distribution):
         return False
 setup(
     name = 'pyCellAnalyst',
-    version = '1.3',
+    version = '1.2',
     description = 'An extensive module for image processing, segmentation, and deformation analysis. Initially aimed at processing 3-D microscopy of cells, this may have applications for other data types as well.',
     packages = ['pyCellAnalyst'],
     long_description = long_description,
