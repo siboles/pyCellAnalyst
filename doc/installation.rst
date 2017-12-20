@@ -11,7 +11,7 @@ Anaconda
 pyCellAnalyst now requires `Anaconda <https://www.continuum.io/downloads>`_ Python from Continuum Analytics. You can install either the full Anaconda package or Miniconda. 
 
 .. note::
-pyCellAnalyst is now built for Python 3. If you wish to run it in your root environment, you must install Anaconda3 or Miniconda3. Alternatively, you can create a conda environment using Python 3.
+   pyCellAnalyst is now built for Python 3. If you wish to run it in your root environment, you must install Anaconda3 or Miniconda3. Alternatively, you can create a conda environment using Python 3.
 
 Installing from Anaconda Cloud
 ------------------------------
