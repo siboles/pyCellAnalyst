@@ -6,6 +6,7 @@ from past.utils import old_div
 from tkinter import *
 from tkinter.ttk import Notebook
 import tkinter.filedialog
+from tkinter.font import Font
 
 import os
 import webbrowser
@@ -1466,6 +1467,9 @@ class Application(Frame):
         pass
 
 root = Tk()
+text = Text(root)
+myFont = Font(family="Times New Roman", size=12)
+text.configure(font=myFont)
 root.title("Welcome to the pyCellAnalyst segmentation GUI.")
 app = Application(root)
 
