@@ -162,9 +162,6 @@ def generateSurfaces(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, uniform=False, output=
             writer.SetInputConnection(normals.GetOutputPort())
             writer.Write()
 
-
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generates reference and deformed VTK 3D polydata. The reference geometry is defined by a super-ellipsoid function.')
     parser.add_argument('-a', type=float, default=2.0, help='float : x-radius of reference super-ellipsoid')
@@ -181,7 +178,6 @@ if __name__ == '__main__':
     parser.add_argument('-multiple', dest='onefile', action='store_false',
                         help='An individual polydata will be written for the reference and each deformation case.')
     args = parser.parse_args()
-    print(args)
     generateSurfaces(a=args.a, b=args.b, c=args.c, n1=args.n1, n2=args.n2, uniform=args.uniform,
                      output=args.output, number=args.number, onefile=args.onefile)
 
