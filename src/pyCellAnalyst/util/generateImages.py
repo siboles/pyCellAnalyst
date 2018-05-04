@@ -8,7 +8,7 @@ import numpy as np
 
 
 
-def generateSuperEllipsoid(a, b, c, n1, n2):
+def _generateSuperEllipsoid(a, b, c, n1, n2):
     superEllipsoid = vtk.vtkParametricSuperEllipsoid()
     superEllipsoid.SetXRadius(a)
     superEllipsoid.SetYRadius(b)
@@ -28,7 +28,7 @@ def generateSuperEllipsoid(a, b, c, n1, n2):
     polydata = superEllipsoidSource.GetOutput()
     return polydata
 
-def packObjects(objects, spacing):
+def _packObjects(objects, spacing):
     bb = np.array([p.GetBounds() for p in objects])
     bb[:,0::2] -= np.array(spacing)
     bb[:,1::2] += np.array(spacing)
@@ -89,7 +89,7 @@ def packObjects(objects, spacing):
             scene.Update()
     return scene.GetOutput()
 
-def deformPolyData(p, spacing, scale):
+def _deformPolyData(p, spacing, scale):
     # create thin-plate spline control points
     bounds = p.GetBounds()
     step_size = np.array(spacing) * 10
@@ -134,7 +134,7 @@ def deformPolyData(p, spacing, scale):
     polydata = polytransform.GetOutput()
     return polydata
 
-def poly2img(p, spacing, noiseLevel):
+def _poly2img(p, spacing, noiseLevel):
     bb = np.array(p.GetBounds())
     extent = [np.ceil(np.abs(bb[2*i+1] - bb[2*i]) / spacing[i]).astype(int) + 10 for i in range(3)]
 
@@ -208,15 +208,15 @@ def generateTestImages(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=[0.1, 0.1, 0
     for i in range(number):
         objects.append(generateSuperEllipsoid(a[i], b[i], c[i], n1, n2))
 
-    polydata = packObjects(objects, spacing)
-    refpolydata = deformPolyData(polydata, spacing, 0.1)
-    refimg, regions = poly2img(refpolydata, spacing, noiseLevel)
+    polydata = _packObjects(objects, spacing)
+    refpolydata = _deformPolyData(polydata, spacing, 0.1)
+    refimg, regions = _poly2img(refpolydata, spacing, noiseLevel)
 
     allregions = {"refernce": [regions], "deformed": []}
     sitk.WriteImage(refimg, os.path.join(root, "ref.nii"))
     for i in range(deformed):
-        defpolydata = deformPolyData(refpolydata, spacing, 0.1)
-        defimg, regions = poly2img(refpolydata, spacing, noiseLevel)
+        defpolydata = _deformPolyData(refpolydata, spacing, 0.1)
+        defimg, regions = _poly2img(refpolydata, spacing, noiseLevel)
         allregions["deformed"].append(regions)
         sitk.WriteImage(defimg, os.path.join(root, "def_{:03d}.nii".format(i+1)))
     return root, allregions

@@ -7,8 +7,12 @@ setup(
     name='pyCellAnalyst',
     version='2.0',
     author='Scott Sibole',
-    packages=['pyCellAnalyst', 'pyCellAnalyst.tests'],
+    packages=['pyCellAnalyst',
+              'pyCellAnalyst.tests',
+              'pyCellAnalyst.util'],
     py_modules=['pyCellAnalyst.Image',
+                'pyCellAnalyst.RegionsOfInterest',
                 'pyCellAnalyst.Filters',
                 'pyCellAnalyst.FilteringPipeline',
-                'pyCellAnalyst.Visualization'])
+                'pyCellAnalyst.Visualization',
+                'pyCellAnalyst.Deformation'])
