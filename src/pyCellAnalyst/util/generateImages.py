@@ -6,8 +6,6 @@ import vtk
 from vtk.util import numpy_support
 import numpy as np
 
-
-
 def _generateSuperEllipsoid(a, b, c, n1, n2):
     superEllipsoid = vtk.vtkParametricSuperEllipsoid()
     superEllipsoid.SetXRadius(a)
@@ -185,6 +183,31 @@ def _poly2img(p, spacing, noiseLevel):
     return itk_img, regions
 
 def generateTestImages(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=[0.1, 0.1, 0.1], output=None, deformed=0, number=1, noiseLevel=0.3):
+    """
+    Description
+    -----------
+    Generates 3D image(s) of cell-like geometry. Optionally, generate reference and deformed pairs. If number > 1
+    then radii are varied +/- 15%.
+
+    Parameters
+    ----------
+    a : float=2.0
+       The x-radius of the superellipsoid.
+    b : float=1.0
+       The y-radius of the superellipsoid.
+    c : float=1.0
+       The z-radius of the superellipsoid.
+    n1 : float 0.9
+       Shape parameter in v; (0.0, 1.0] ranges from squared to ellipsoidal corners, > 1.0 concave surface with sharp edges.
+    n2 : float 0.9
+       Shape parameter in u; (0.0, 1.0] ranges from squared to ellipsoidal corners, > 1.0 concave surface with sharp edges.
+    output : str
+       The output directory to write image(s) to. If not provided the current working directory will be used.
+    number : int=1
+       Number of deformed images to generate.
+    noiseLevel : float=0.3
+       Standard deviation of Gaussian noise to add to normalized image.
+    """
     if output is None:
         root = os.getcwd()
     elif os.path.isabs(output):
