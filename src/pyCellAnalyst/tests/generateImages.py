@@ -184,7 +184,7 @@ def poly2img(p, spacing, noiseLevel):
         regions.append(origin + size)
     return itk_img, regions
 
-def generateTestImages(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=[0.1, 0.1, 0.1], output=None, deformed=0, noiseLevel=0.3, number=1):
+def generateTestImages(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=[0.1, 0.1, 0.1], output=None, deformed=0, number=1, noiseLevel=0.3):
     if output is None:
         root = os.getcwd()
     elif os.path.isabs(output):
@@ -233,6 +233,6 @@ if __name__ == '__main__':
     parser.add_argument('-output', type=str, default=None, help='str : output directory to write images to')
     parser.add_argument('-number', type=int, default=1, help='int : how many clustered cells to generate')
     parser.add_argument('-deformed', type=int, default=0, help='int : how many deformed images to generate.')
-    parser.add_argument('-noise_level', type=float, default=0.3, help='float : standard deviation of Gaussian noise to add to normalized image.')
+    parser.add_argument('-noiseLevel', type=float, default=0.3, help='float : standard deviation of Gaussian noise to add to normalized image.')
     args = parser.parse_args()
-    generateTestImages(a=args.a, b=args.b, c=args.c, n1=args.n1, n2=args.n2, output=args.output, deformed=args.deformed, number=args.number)
+    generateTestImages(a=args.a, b=args.b, c=args.c, n1=args.n1, n2=args.n2, output=args.output, deformed=args.deformed, number=args.number, noiseLevel=args.noiseLevel)
