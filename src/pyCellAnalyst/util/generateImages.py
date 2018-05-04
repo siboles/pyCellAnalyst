@@ -206,7 +206,7 @@ def generateTestImages(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=[0.1, 0.1, 0
 
     objects = []
     for i in range(number):
-        objects.append(generateSuperEllipsoid(a[i], b[i], c[i], n1, n2))
+        objects.append(_generateSuperEllipsoid(a[i], b[i], c[i], n1, n2))
 
     polydata = _packObjects(objects, spacing)
     refpolydata = _deformPolyData(polydata, spacing, 0.1)
