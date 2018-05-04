@@ -207,6 +207,13 @@ def generateTestImages(a=2.0, b=1.0, c=1.0, n1=0.9, n2=0.9, spacing=[0.1, 0.1, 0
        Number of deformed images to generate.
     noiseLevel : float=0.3
        Standard deviation of Gaussian noise to add to normalized image.
+
+    Returns
+    -------
+    root : str
+       Root directory for output images.
+    regions : dict
+       Dictionary containing 'reference' and 'deformed' regions of interest of for each cell.
     """
     if output is None:
         root = os.getcwd()
