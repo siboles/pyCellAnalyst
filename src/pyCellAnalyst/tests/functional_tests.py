@@ -4,116 +4,24 @@ import shutil
 import os
 
 import pyCellAnalyst
+from pyCellAnalyst.util import generateImages
 import SimpleITK as sitk
 import vtk
 import numpy as np
 
-def transformBaseImage(image, displacements, noiseLevel):
-    size = [int(np.ceil(i / 2.0)) for i in image.GetSize()]
-    padded = sitk.ConstantPad(image, size, size, 0.0)
-    tx = sitk.BSplineTransformInitializer(padded, [2] * padded.GetDimension(), 1)
-    tx.SetParameters(displacements)
-    newimage = sitk.Resample(padded, tx, sitk.sitkLinear)
-    mask = sitk.BinaryThreshold(newimage, 0.5, 1e3)
-    ls = sitk.LabelShapeStatisticsImageFilter()
-    ls.Execute(mask)
-    bb = ls.GetBoundingBox(1)
-    dim = newimage.GetDimension()
-    #pad bounding box by 2 voxels
-    origin = [i-2 for i in bb[0:dim]]
-    size = [i+4 for i in bb[dim:]]
-    #Crop padded image to include deformed cells
-    image = sitk.RegionOfInterest(newimage, size, origin)
-    image = sitk.AdditiveGaussianNoise(image, standardDeviation=noiseLevel)
-    image = sitk.RescaleIntensity(image, 0.0, 1.0)
-
-    mask = sitk.RegionOfInterest(mask, size, origin)
-    # Find the object subregions
-    labels = sitk.ConnectedComponent(mask)
-    ls.Execute(labels)
-    regions = []
-    for l in ls.GetLabels():
-        bb = ls.GetBoundingBox(l)
-        origin = [i-2 for i in bb[0:dim]]
-        size = [i+4 for i in bb[dim:]]
-        regions.append(origin + size)
-    return image, regions
-
-def generateSuperEllipsoid(A, B, C, r, t, spacing):
-    """
-    generate the base image
-    using super-ellipsoid to represent pseudo-cells
-    [(|x / A|)^r + (|y / B|)^r]^( t / r) + (|z / C|)^t <= 1
-    """
-    steps = np.array([2*(A + spacing[0]),
-                      2*(B + spacing[1]),
-                      2*(C + spacing[2])]) / np.array(spacing)
-    # this is reversed due to ordering difference of SimpleITK and numpy
-    grid = np.meshgrid(np.linspace(-C - spacing[2], C + spacing[2], num=steps[2]),
-                       np.linspace(-B - spacing[1], B + spacing[1], num=steps[1]),
-                       np.linspace(-A - spacing[0], A + spacing[0], num=steps[0]), indexing='ij')
-
-    f = (np.abs(grid[2] / A)**r + np.abs(grid[1] / B)**r)**(t / r) + np.abs(grid[0] / C)**t
-    f = f <= 1
-    return f.astype(np.float32)
-
-def generateTestImages(n=1, deformed=False, noiseLevel=0.3):
-    n = int(n)
-
-    spacing = [0.25, 0.25, 0.25]
-    # Cell 1:
-    # A = 4
-    # B = 5
-    # C = 2
-    # r = 2
-    # t = 2.5
-    cell1 = generateSuperEllipsoid(4, 5, 2, 2, 2.5, spacing)
-    image1 = sitk.GetImageFromArray(cell1)
-    image1.SetOrigin([0.0, 0.0, 0.0])
-    image1.SetSpacing(spacing)
-
-    # Cell 2:
-    # A = 5
-    # B = 6
-    # C = 2.5
-    # r = 2
-    # t = 3.0
-    cell2 = generateSuperEllipsoid(5, 6, 2.5, 2, 3.0, spacing)
-    image2 = sitk.GetImageFromArray(cell2)
-    image2.SetOrigin([0.0, 0.0, 0.0])
-    image2.SetSpacing(spacing)
-
-    image = sitk.Tile([image1, image2], [2,1,1])
-
-    parent_dir = tempfile.mkdtemp()
-    allregions = {"reference": [], "deformed": []}
-    for i in range(n):
-        displacements = np.random.normal(0.0, 1.0, 91)
-        reference, regions = transformBaseImage(image, displacements, noiseLevel)
-        image_path = os.path.join(parent_dir, "ref{:d}".format(i+1))
-        os.mkdir(image_path)
-        sitk.WriteImage(reference, os.path.join(image_path, "img.nii"))
-        allregions["reference"].append(regions)
-        if deformed:
-            displacements2 = np.random.normal(0.0, 1.0, 91)
-            deformed, regions = transformBaseImage(reference, displacements2, noiseLevel)
-            image_path = os.path.join(parent_dir, "def{:d}".format(i+1))
-            os.mkdir(image_path)
-            sitk.WriteImage(deformed, os.path.join(image_path, "img.nii"))
-            allregions["deformed"].append(regions)
-    return parent_dir, allregions
-
 class ImageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls._imageRootDir, cls._regions = generateTestImages(n=1, noiseLevel=0.5)
+        cls._imageRootDir, cls._regions = generateImages.generateTestImages(number=2, noiseLevel=0.5,
+                                                                            spacing=[0.1, 0.1, 0.1],
+                                                                            output=tempfile.mkdtemp())
 
     @classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls._imageRootDir)
 
     def setUp(self):
-        self.im = pyCellAnalyst.FloatImage(os.path.join(self._imageRootDir, 'ref1', 'img.nii'), spacing=[0.25, 0.25, 0.25])
+        self.im = pyCellAnalyst.FloatImage(os.path.join(self._imageRootDir, 'ref.nii'), spacing=[0.1, 0.1, 0.1])
 
     def test_image_from_file(self):
         self.assertIsInstance(self.im, pyCellAnalyst.Image)
@@ -133,14 +41,14 @@ class ImageTest(unittest.TestCase):
         for i in range(size[2]):
             islice = sitk.Extract(self.im.image, [size[0], size[1], 0], [0, 0, i])
             sitk.WriteImage(islice, os.path.join(tmp_dir, 'slice{:03d}.tif'.format(i)))
-        im = pyCellAnalyst.FloatImage(tmp_dir, spacing=[0.25, 0.25, 0.25])
+        im = pyCellAnalyst.FloatImage(tmp_dir, spacing=[0.1, 0.1, 0.1])
         self.assertIsInstance(im, pyCellAnalyst.Image)
         shutil.rmtree(tmp_dir)
 
     def test_image_to_and_from_numpy(self):
         self.im.convertToNumpy()
         self.assertIsInstance(self.im.numpyimage, np.ndarray)
-        im2 = pyCellAnalyst.FloatImage(self.im.numpyimage, spacing=[0.25, 0.25, 0.25])
+        im2 = pyCellAnalyst.FloatImage(self.im.numpyimage, spacing=[0.1, 0.1, 0.1])
         self.assertIsInstance(im2, pyCellAnalyst.Image)
 
     def test_image_to_vtk(self):
@@ -166,7 +74,7 @@ class ImageTest(unittest.TestCase):
         f = pyCellAnalyst.GradientAnisotropicDiffusion(inputImage=self.im)
         f.parameters['iterations'] = 15
         f.parameters['conductance'] = 10
-        f.parameters['time_step'] = 0.02
+        f.parameters['time_step'] = 0.005
         f.execute()
 
     def test_filter_bilateral(self):
@@ -208,8 +116,10 @@ class ImageTest(unittest.TestCase):
 class SegmentationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls._imageRootDir, cls._regions = generateTestImages(n=1, noiseLevel=0.5)
-        cls._im = pyCellAnalyst.FloatImage(os.path.join(cls._imageRootDir, 'ref1', 'img.nii'), spacing=[0.25, 0.25, 0.25])
+        cls._imageRootDir, cls._regions = generateImages.generateTestImages(number=2, noiseLevel=0.5,
+                                                                            spacing=[0.1, 0.1, 0.1],
+                                                                            output=tempfile.mkdtemp())
+        cls._im = pyCellAnalyst.FloatImage(os.path.join(cls._imageRootDir, 'ref.nii'), spacing=[0.1, 0.1, 0.1])
         cls._roi = pyCellAnalyst.RegionsOfInterest(inputImage=cls._im, regions_of_interest=cls._regions["reference"][0])
         cls._smooth_images = []
         for i in cls._roi.images:
@@ -243,23 +153,20 @@ class SegmentationTest(unittest.TestCase):
         sv.view()
 
     def test_geodesic_active_contour(self):
-        s1 = pyCellAnalyst.GeodesicActiveContour(inputImage=self._smooth_images[0], curvatureScaling=0.5, advectionScaling=1.0)
+        s1 = pyCellAnalyst.GeodesicActiveContour(inputImage=self._smooth_images[0], propagationScaling=20.0,
+                                                 curvatureScaling=1.0, advectionScaling=1.0, maximumRMSError=0.005)
         s1.execute()
 
+
         # test using a thresholded image as seed. SimpleITK used directly to eliminate dependence on other tested features.
-        segs = []
-        seeds = [pyCellAnalyst.EightBitImage(sitk.OtsuThreshold(i.image, 0, 1), spacing=i.spacing) for i in self._smooth_images]
-        for i, s in enumerate(seeds):
-            s2 = pyCellAnalyst.GeodesicActiveContour(inputImage=self._smooth_images[i], seed=s)
-            s2.execute()
-            segs.append(s2.outputImage)
+        seed = pyCellAnalyst.EightBitImage(sitk.OtsuThreshold(self._smooth_images[0].image, 0, 1),
+                                           spacing=self._smooth_images[0].spacing)
+        s2 = pyCellAnalyst.GeodesicActiveContour(inputImage=self._smooth_images[0], seed=seed,
+                                                 propagationScaling=20.0, curvatureScaling=1.0,
+                                                 advectionScaling=1.0, maximumRMSError=0.005)
+        s2.execute()
 
-            writer = vtk.vtkPolyDataWriter()
-            writer.SetFileName('geodesic{}.vtk'.format(i+1))
-            writer.SetInputData(s2.isocontour)
-            writer.Write()
-
-        sv = pyCellAnalyst.SliceViewer(inputImages=self._roi.images + [s1.outputImage] + segs , titles=['Original 1', 'Original 2', 'No seed', 'Otsu Seed 1', 'Otsu Seed 2'])
+        sv = pyCellAnalyst.SliceViewer(inputImages=[self._roi.images[0], s1.edgePotential, s1.outputImage, s2.outputImage], titles=['Original', 'Edge Potential', 'No seed', 'Otsu Seed 1'])
         sv.view()
 
     def test_visualize_isosurfaces(self):
