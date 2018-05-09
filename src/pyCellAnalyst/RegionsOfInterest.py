@@ -79,11 +79,10 @@ class RegionsOfInterest(object):
             raise AttributeError('order must be either ImageJ or OriginSize')
 
         wb = load_workbook(filename)
-        sheets = wb.get_sheet_names()
-        if len(sheets) > 1:
+        if len(wb.sheetnames) > 1:
             print('::WARNING:: Multiple sheets in region_of_interest file. Assuming first sheet contains information.')
 
-        ws = wb.get_sheet_by_name(sheets[0])
+        ws = wb[wb.sheetnames[0]]
         values = np.array(list(ws.values))[self.start_row:,self.start_col:].astype(int)
         if self.order == 'ImageJ':
             if values.shape[1] == 5:
