@@ -3,6 +3,7 @@ import fnmatch
 from .Helpers import FixedDict
 import vtk
 import SimpleITK as sitk
+import numpy as np
 
 class ObjectPairs(object):
     def __init__(self, reference=None, deformed=None, identifier=None):
@@ -60,11 +61,13 @@ class ObjectPairs(object):
     def __parseSurfaceFile(self, f):
         if f.lower().endswith('vtk'):
             reader = vtk.vtkPolyDataReader()
+        elif f.lower().endswith('vtp'):
+            reader = vtk.vtkXMLPolyDataReader()
         elif f.lower().endswith('stl'):
             reader = vtk.vtkSTLReader()
         else:
-            print("::WARNING:: File extension not recognized. Attempting to read as an STL.")
-            reader = vtk.vtkSTLReader()
+            print("::WARNING:: File extension not recognized. Attempting to read as a VTP.")
+            reader = vtk.vtkXMLPolyDataReader()
         reader.SetFileName(f)
         return reader.GetOutput()
 
@@ -72,16 +75,24 @@ class ObjectPairs(object):
         files = sorted(os.listdir(d))
         stlfiles = fnmatch.filter(files, '*.stl')
         vtkfiles = fnmatch.filter(files, '*.vtk')
-        if len(stlfiles) > 0 and len(vtkfiles) > 0:
-            if len(stlfiles) >= len(vtkfiles):
-                print(("::WARNING:: Both STL and VTK files detected in this directory."
+        vtpfiles = fnmatch.filter(files, '*.vtp')
+        filenumber = [len(i) for i in (vtpfiles, vtkfiles, stlfiles)]
+        if sum(i > 0 for i in filenumber) > 1:
+            greatest = np.argmax(filenumber)
+            if greatest == 0:
+                print(("::WARNING::  Multiple supported filetypes detected in this directory."
+                       " Since there are more or an equal number of VTP files, these will be read."))
+                reader = vtk.vtkXMLPolyDataReader()
+                files = vtpfiles
+            elif greatest == 1:
+                print(("::WARNING::  Multiple supported filetypes detected in this directory."
+                       " Since there are more or an equal number of VTK files, these will be read."))
+                reader = vtk.vtkPolyDataReader()
+                files = vtkfiles
+            elif greatest == 2:
+                print(("::WARNING::  Multiple supported filetypes detected in this directory."
                        " Since there are more or an equal number of STL files, these will be read."))
                 reader = vtk.vtkSTLReader()
-                files = stlfiles
-            elif len(vtkfiles) > len(stlfiles):
-                print(("::WARNING:: Both STL and VTK files detected in this directory."
-                       " Since there are more VTK files, these will be read."))
-                reader = vtk.vtkPolyDataReader()
                 files = vtkfiles
         surfaces = []
         for f in files:
