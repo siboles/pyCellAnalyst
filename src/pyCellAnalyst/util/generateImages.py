@@ -168,12 +168,14 @@ def _poly2img(p, spacing, noiseLevel):
     itk_img.SetSpacing(img.GetSpacing())
     itk_img.SetOrigin(img.GetOrigin())
 
+    mask = sitk.BinaryThreshold(itk_img, 0.5, 1e3)
+
     itk_img = sitk.AdditiveGaussianNoise(itk_img, standardDeviation=noiseLevel)
     itk_img = sitk.RescaleIntensity(itk_img, 0.0, 1.0)
 
-    mask = sitk.BinaryThreshold(itk_img, 0.5, 1e3)
+    labels = sitk.ConnectedComponent(mask)
     ls = sitk.LabelShapeStatisticsImageFilter()
-    ls.Execute(mask)
+    ls.Execute(labels)
     regions = []
     for l in ls.GetLabels():
         bb = ls.GetBoundingBox(l)
