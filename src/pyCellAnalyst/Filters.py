@@ -65,7 +65,7 @@ class Gaussian(Filter):
     def execute(self):
         if self._inputImage is None:
             raise AttributeError("Before executing the filter, you must define the inputImage.")
-        self.outputImage = FloatImage(sitk.DiscreteGaussian(self._inputImage.image, **self.parameters),
+        self.outputImage = FloatImage(sitk.DiscreteGaussian(self._inputImage.image, self.parameters['variance']),
                                       spacing=self._inputImage.spacing)
 
 class Median(Filter):
