@@ -6,16 +6,6 @@ import vtk
 import numpy as np
 
 
-def _makeSeed(im, position, radius):
-    seedImage = sitk.Image(*im.GetSize(), sitk.sitkUInt8)
-    seedImage.CopyInformation(im)
-    seedImage[position] = 1
-    dm = sitk.SignedMaurerDistanceMap(seedImage, insideIsPositive=False,
-                                      squaredDistance=False, useImageSpacing=False)
-    seedImage = sitk.BinaryThreshold(dm, -1e7, radius) 
-    seedImage = EightBitImage(data=seedImage, spacing=im.GetSpacing())
-    return seedImage
-
 class Segmentation(object):
     """
     Description
@@ -269,12 +259,12 @@ class GeodesicActiveContour(Segmentation):
                  propagationScaling=1.0, curvatureScaling=0.7, advectionScaling=1.0,
                  maximumRMSError=0.01, numberOfIterations=1000):
         super().__init__(inputImage=inputImage, objectID=objectID)
-        self.seed = seed
         self.parameters = FixedDict({'propagationScaling': float(propagationScaling),
                                      'curvatureScaling': float(curvatureScaling),
                                      'advectionScaling': float(advectionScaling),
                                      'maximumRMSError': float(maximumRMSError),
                                      'numberOfIterations': int(numberOfIterations)})
+        self.seed = seed
 
     @property
     def seed(self):
@@ -283,16 +273,13 @@ class GeodesicActiveContour(Segmentation):
     @seed.setter
     def seed(self, seed):
         if seed is None:
-            print('::WARNING:: No seed image was provided for {}. Assuming sphere at image center with a radius 1/4 of the smallest image edge length.'.format(self.__class__.__name__))
-            seed = _makeSeed(self._inputImage.image,
-                             [i // 2 for i in self._inputImage.image.GetSize()],
-                             min([i / 4.0 for i in self._inputImage.image.GetSize()]))
+            print('::WARNING:: No seed image was provided for {}. Percentage based threshold (80%) applied.\n ConfidenceConnected voxels to centroid of thresholded object used as seed.'.format(self.__class__.__name__))
+            seed = self._makeSeed(self._inputImage)
         elif isinstance(seed, list):
             if self.__inputImage.image.GetDimension() != len(seed):
-                raise ValueError('If seed is provided as a list, it must include a pixel coordinate for each image dimension and a radius.')
-            seed = _makeSeed(self._inputImage.image,
-                             seed[0:self._inputImage.image.GetDimension()],
-                             seed[self._inputImage.image.GetDimension()])
+                raise ValueError('If seed is provided as a list, it must include a pixel coordinate for each image dimension.')
+            seed = self._makeSeed(self._inputImage,
+                                  seed[0:self._inputImage.image.GetDimension()])
         elif isinstance(seed, EightBitImage):
             pass
         else:
@@ -300,13 +287,30 @@ class GeodesicActiveContour(Segmentation):
 
         self.__seed = seed
 
+    def _makeSeed(self, im, position=None):
+        if position is None:
+            t = Percentage(im, percentage=80.0)
+            t.execute()
+
+            ls = sitk.LabelShapeStatisticsImageFilter()
+            ls.Execute(t.outputImage.image)
+            seedlist = [im.image.TransformPhysicalPointToIndex(ls.GetCentroid(1))]
+        else:
+            seedlist = [position]
+        seedImage = sitk.ConfidenceConnected(im.image, seedlist, multiplier=2.0,
+                                             numberOfIterations=1)
+
+        seedImage = sitk.BinaryMorphologicalClosing(seedImage, [3, 3, 2])
+
+        seedImage = EightBitImage(data=seedImage, spacing=im.spacing)
+        return seedImage
+
     def execute(self):
         d = sitk.SignedMaurerDistanceMap(self.__seed.image, insideIsPositive=False, squaredDistance=False,
                                          useImageSpacing=True)
-        #grad = sitk.GradientMagnitude(self._inputImage.image)
-        #grad = sitk.RescaleIntensity(sitk.Cast(sitk.BoundedReciprocal(grad), sitk.sitkFloat32), 0.0, 1.0)
-        canny = sitk.CannyEdgeDetection(self._inputImage.image, 0.01, 0.1)
-        speed = sitk.SignedMaurerDistanceMap(sitk.Cast(canny, sitk.sitkUInt8), squaredDistance=True, useImageSpacing=True)
+        canny = sitk.CannyEdgeDetection(self._inputImage.image, 0.05, 0.1, variance=[s / 5.0 for s in self._inputImage.spacing])
+        speed = sitk.SignedMaurerDistanceMap(sitk.Cast(canny, sitk.sitkUInt8),
+                                             squaredDistance=False, useImageSpacing=True)
         gd = sitk.GeodesicActiveContourLevelSetImageFilter()
         gd.SetPropagationScaling(self.parameters['propagationScaling'])
         gd.SetCurvatureScaling(self.parameters['curvatureScaling'])
