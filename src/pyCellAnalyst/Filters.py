@@ -144,14 +144,14 @@ class GradientAnisotropicDiffusion(Filter):
         Must be set prior to calling **execute()** method.
     iterations : int=20, optional
     conductance : float=9.0, optional
-    time_step : float=0.01, optional
+    time_step : float=0.005, optional
 
     Attributes
     ----------
     outputImage : pyCellAnalyst.Image
         The filtered image. Generated when **execute()** is called.
     """
-    def __init__(self, inputImage=None, iterations=20, conductance=9, time_step=0.01):
+    def __init__(self, inputImage=None, iterations=20, conductance=9, time_step=0.005):
         super().__init__(inputImage)
         self.parameters = FixedDict({'iterations': iterations,
                                      'conductance': conductance,
@@ -274,3 +274,35 @@ class EnhanceEdges(Filter):
             raise AttributeError("Before executing the filter, you must define the inputImage.")
         self.outputImage = FloatImage(sitk.LaplacianSharpening(self._inputImage.image),
                                       spacing=self._inputImage.spacing)
+
+class Equalize(Filter):
+    """
+    Description
+    -----------
+    Performs adaptive histogram equalization on image within convolved window.
+
+    Parameters
+    ----------
+    inputImage : pyCellAnalyst.Image
+        Must be set prior to calling **execute()** method.
+    window_fraction : float=[0.25, 0.25, 0.25]
+        Size of window to convolve expressed as a fraction of the each image dimension length.
+
+    Attributes
+    ----------
+    outputImage : pyCellAnalyst.Image
+        The filtered image. Generated when **execute()** is called.
+    """
+    def __init__(self, inputImage=None, window_fraction=[0.25,0.25,0.25]):
+        super().__init__(inputImage)
+        self.parameters = FixedDict({'window_fraction': window_fraction})
+
+    def execute(self):
+        if self._inputImage is None:
+            raise AttributeError("Before executing the filter, you must define the inputImage.")
+        window = self.parameters['window_fraction']
+        radius = [int(r / w + 1) for r, w in zip(self._inputImage.image.GetSize(), window)]
+        self.outputImage = FloatImage(sitk.AdaptiveHistogramEqualization(self._inputImage.image,
+                                                                         radius=radius),
+                                      spacing=self._inputImage.spacing)
+
