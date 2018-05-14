@@ -301,7 +301,7 @@ class Equalize(Filter):
         if self._inputImage is None:
             raise AttributeError("Before executing the filter, you must define the inputImage.")
         window = self.parameters['window_fraction']
-        radius = [int(r / w + 1) for r, w in zip(self._inputImage.image.GetSize(), window)]
+        radius = [int(r * w + 1) for r, w in zip(self._inputImage.image.GetSize(), window)]
         self.outputImage = FloatImage(sitk.AdaptiveHistogramEqualization(self._inputImage.image,
                                                                          radius=radius),
                                       spacing=self._inputImage.spacing)
