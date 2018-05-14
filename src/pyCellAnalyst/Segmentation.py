@@ -85,18 +85,34 @@ class Segmentation(object):
         triangles.SetInputConnection(iso.GetOutputPort())
         triangles.Update()
 
-        deci = vtk.vtkDecimatePro()
-        deci.SetInputConnection(triangles.GetOutputPort())
-        deci.PreserveTopologyOn()
-        deci.SplittingOff()
-        deci.SetTargetReduction(0.1)
-
-
         if self.outputImage.image.GetDimension() == 3:
+            #check for holes
+            boundaries = vtk.vtkFeatureEdges()
+            boundaries.ManifoldEdgesOff()
+            boundaries.FeatureEdgesOff()
+            boundaries.NonManifoldEdgesOff()
+            boundaries.BoundaryEdgesOn()
+            boundaries.SetInputConnection(triangles.GetOutputPort())
+            boundaries.Update()
+            edges = vtk.vtkGeometryFilter()
+            edges.SetInputConnection(boundaries.GetOutputPort())
+            edges.Update()
+            if edges.GetOutput().GetNumberOfLines() > 0:
+                print('::WARNING:: Hole(s) detected in isocontour. These were filled with a planar cap.')
+            deci = vtk.vtkDecimatePro()
+            deci.SetInputConnection(triangles.GetOutputPort())
+            deci.PreserveTopologyOff()
+            deci.SplittingOff()
+            deci.BoundaryVertexDeletionOn()
+            deci.SetTargetReduction(0.1)
+            fillhole = vtk.vtkFillHolesFilter()
+            fillhole.SetHoleSize(1e7)
+            fillhole.SetInputConnection(deci.GetOutputPort())
+            fillhole.Update()
             smooth = vtk.vtkWindowedSincPolyDataFilter()
-            smooth.SetInputConnection(deci.GetOutputPort())
+            smooth.SetInputConnection(fillhole.GetOutputPort())
             smooth.NormalizeCoordinatesOn()
-            smooth.SetNumberOfIterations(20)
+            smooth.SetNumberOfIterations(30)
             smooth.SetPassBand(0.01)
             smooth.FeatureEdgeSmoothingOff()
             smooth.Update()
@@ -298,7 +314,10 @@ class GeodesicActiveContour(Segmentation):
         else:
             seedlist = [position]
         seedImage = sitk.ConfidenceConnected(im.image, seedlist, multiplier=2.0,
-                                             numberOfIterations=1)
+                                             numberOfIterations=4)
+        ls.Execute(seedImage)
+        seedlist.append(im.image.TransformPhysicalPointToIndex(ls.GetCentroid(1)))
+        seedImage = sitk.ConfidenceConnected(im.image, seedlist, multiplier=2.0, numberOfIterations=4)
 
         seedImage = sitk.BinaryMorphologicalClosing(seedImage, [3, 3, 2])
 
@@ -318,6 +337,7 @@ class GeodesicActiveContour(Segmentation):
         gd.SetMaximumRMSError(self.parameters['maximumRMSError'])
         gd.SetNumberOfIterations(self.parameters['numberOfIterations'])
         ls = gd.Execute(d, speed)
+        ls = sitk.Median(ls, [1,1,1])
         print("... Geodesic Active Contour Segmentation Completed")
         print(("... ... Elapsed Iterations: {:d}"
                 .format(gd.GetElapsedIterations())))
@@ -327,6 +347,6 @@ class GeodesicActiveContour(Segmentation):
         self.outputImage = EightBitImage(b*self.objectID, spacing=self._inputImage.image.GetSpacing())
         self._chooseObject()
         self.edgePotential = Image(speed, spacing=self._inputImage.spacing)
-        self.isovalue = 1e-7
+        self.isovalue = 0.5
         self._generateIsoContour(baseImage=ls)
 
