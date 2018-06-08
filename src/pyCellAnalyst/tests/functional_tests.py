@@ -107,6 +107,14 @@ class ImageTest(unittest.TestCase):
         for i in rois.images:
             self.assertIsInstance(i, type(self.im))
 
+    def test_regions_of_interest_2dFrom3d(self):
+        regions = np.copy(self._regions["reference"][0])
+        regions[:,-1] = 1
+        regions[:,2] += np.array(self._regions["reference"][0])[:,-1] // 2
+        rois = pyCellAnalyst.RegionsOfInterest(inputImage=self.im, regions_of_interest=regions)
+        for i in rois.images:
+            self.assertIsInstance(i, type(self.im))
+
     def test_slice_viewer(self):
         f = pyCellAnalyst.CurvatureAnisotropicDiffusion(inputImage=self.im, iterations=20)
         f.execute()

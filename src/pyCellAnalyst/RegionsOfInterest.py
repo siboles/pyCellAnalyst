@@ -24,14 +24,17 @@ class RegionsOfInterest(object):
         Row in file where region definitions begin
     start_col : int=1, optional
         Column in file where region defintions begin
+    slice2d : bool=False, optional
+        If region of interest is a 2d slice of a 3d image
 
     Attributes
     -----------
     images : [pyCellAnalyst.Image,...]
        List of new images for each region of interest
     """
-    def __init__(self, inputImage=None, regions_of_interest=None, order='ImageJ', start_row=1, start_col=1):
+    def __init__(self, inputImage=None, regions_of_interest=None, order='ImageJ', start_row=1, start_col=1, slice2d=False):
         self.order = order
+        self.slice2d = slice2d
         self.start_row = start_row
         self.start_col = start_col
         self.inputImage = inputImage
@@ -55,7 +58,8 @@ class RegionsOfInterest(object):
     def regions_of_interest(self, regions_of_interest):
         if regions_of_interest is None:
             print("::WARNING:: regions_of_interest unspecified. Assuming whole image.")
-            regions_of_interest = np.array([[0,0,0]+[i for i in self.inputImage.image.GetSize()]]).astype(int)
+            regions_of_interest = np.array([[0] * self.inputImage.image.GetDimension()
+                                            + [i for i in self.inputImage.image.GetSize()]]).astype(int)
         elif isinstance(regions_of_interest, list):
             regions_of_interest = np.array(regions_of_interest)
         elif isinstance(regions_of_interest, np.ndarray):
@@ -85,17 +89,21 @@ class RegionsOfInterest(object):
         ws = wb[wb.sheetnames[0]]
         values = np.array(list(ws.values))[self.start_row:,self.start_col:].astype(int)
         if self.order == 'ImageJ':
-            if values.shape[1] == 5:
-                if values.shape[0] % 2 != 0:
-                    raise ValueError('An odd number of rows were read from regions_of_interest file and ImageJ was specified for order. Something is wrong!')
-                regions = np.zeros((values.shape[0] // 2, 6))
-                cnt = 0
-                for i in range(values.shape[0]):
-                    if i % 2 == 1:
-                        regions[cnt,[0,1,3,4]] = values[i,[0,1,2,3]]
-                        regions[cnt,2] = values[i-1,4]
-                        regions[cnt,5] = values[i,4] - values[i-1,4]
-                        cnt += 1
+            if self.inputImage.image.GetDimension == 3:
+                if self.slice2d:
+                    regions = np.ones(values.shape[0], 6)
+                    regions[:,0:5] = values[i, [0,1,4,2,3]]
+                else:
+                    if values.shape[0] % 2 != 0:
+                        raise ValueError('An odd number of rows were read from regions_of_interest file and ImageJ was specified for order. Something is wrong!')
+                    regions = np.zeros((values.shape[0] // 2, 6))
+                    cnt = 0
+                    for i in range(values.shape[0]):
+                        if i % 2 == 1:
+                            regions[cnt,[0,1,3,4]] = values[i,[0,1,2,3]]
+                            regions[cnt,2] = values[i-1,4]
+                            regions[cnt,5] = values[i,4] - values[i-1,4]
+                            cnt += 1
         else:
             regions = values
         return regions.astype(int)
