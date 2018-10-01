@@ -27,6 +27,7 @@ class Image(object):
             self._parseImageSequence(data)
 
         self.spacing = spacing
+        self.vtkimage = None
 
     @property
     def spacing(self):
@@ -155,7 +156,8 @@ class Image(object):
         if name is None:
             name = 'output'
 
-        self.convertToVTK()
+        if self.vtkimage is None:
+            self.convertToVTK()
         writer = vtk.vtkXMLImageDataWriter()
         writer.SetFileName('{:s}.vti'.format(name))
         writer.SetInputData(self.vtkimage)

@@ -9,10 +9,4 @@ setup(
     author='Scott Sibole',
     packages=['pyCellAnalyst',
               'pyCellAnalyst.tests',
-              'pyCellAnalyst.util'],
-    py_modules=['pyCellAnalyst.Image',
-                'pyCellAnalyst.RegionsOfInterest',
-                'pyCellAnalyst.Filters',
-                'pyCellAnalyst.FilteringPipeline',
-                'pyCellAnalyst.Visualization',
-                'pyCellAnalyst.Deformation'])
+              'pyCellAnalyst.util'])

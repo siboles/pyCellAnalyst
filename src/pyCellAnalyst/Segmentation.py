@@ -17,12 +17,15 @@ class Segmentation(object):
     inputImage : pyCellAnalyst.Image
     objectID : int=1, optional
         The label to assign to segmented object.
+    multiple : bool=False, optional
+        If True will return all separate segmented objects
     """
-    def __init__(self, inputImage=None, objectID=1):
+    def __init__(self, inputImage=None, objectID=1, multiple=False):
         self.inputImage = inputImage
         self.objectID = int(objectID)
         self.parameters = FixedDict({})
         self.isocontour = None
+        self.multiple = multiple
 
     @property
     def inputImage(self):
@@ -123,7 +126,18 @@ class Segmentation(object):
             normal_generator.Update()
             self.isocontour = normal_generator.GetOutput()
         else:
-            self.isocontour = triangles.GetOutput()
+            stripper = vtk.vtkStripper()
+            stripper.SetInputConnection(triangles.GetOutputPort())
+            spline = vtk.vtkSplineFilter()
+            spline.SetInputConnection(stripper.GetOutputPort())
+            spline.SetSubdivideToLength()
+            spline.SetLength(2.1 * np.min(baseImage.GetSpacing()))
+            spline2 = vtk.vtkSplineFilter()
+            spline2.SetInputConnection(spline.GetOutputPort())
+            spline2.SetSubdivideToLength()
+            spline2.SetLength(np.min(baseImage.GetSpacing()))
+            spline2.Update()
+            self.isocontour = spline2.GetOutput()
 
 class Threshold(Segmentation):
     """
@@ -131,8 +145,8 @@ class Threshold(Segmentation):
     -----------
     Base class for thresholding methods.
     """
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple)
         self.mask = mask
         self._thresholdMethod = None
     @property
@@ -163,71 +177,72 @@ class Threshold(Segmentation):
                 self.isovalue = self._thresholdMethod.GetLowerThreshold()
             else:
                 self.isovalue = self._thresholdMethod.GetThreshold()
-            self._chooseObject()
+            if not self.multiple:
+                self._chooseObject()
             baseImage = sitk.Mask(self._inputImage.image, self.outputImage.image > 0)
             self._generateIsoContour(baseImage=baseImage)
         else:
             raise AttributeError("A pyCellAnalyst.Threshold subclass must be instantiated before calling execute()")
 
 class Otsu(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.OtsuThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class Huang(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.HuangThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class RidlerCalvard(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.IsoDataThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class MaxEntropy(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.MaximumEntropyThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class Moments(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.MomentsThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class Yen(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.YenThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class RenyiEntropy(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.RenyiEntropyThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class Shanbhag(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self._thresholdMethod = sitk.ShanbhagThresholdImageFilter()
         self._thresholdMethod.SetInsideValue(0)
         self._thresholdMethod.SetOutsideValue(1)
 
 class Percentage(Threshold):
-    def __init__(self, inputImage=None, objectID=1, mask=None, percentage=40.0):
-        super().__init__(inputImage=inputImage, objectID=objectID, mask=mask)
+    def __init__(self, inputImage=None, objectID=1, multiple=False, mask=None, percentage=40.0):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple, mask=mask)
         self.percentage = percentage
         self._thresholdMethod = sitk.BinaryThresholdImageFilter()
         self._thresholdMethod.SetLowerThreshold(self.percentage / 100.0)
@@ -271,15 +286,17 @@ class GeodesicActiveContour(Segmentation):
     numberOfIterations : int=1000, optional
         The maximum number of iterations the active contour will conduct.
     """
-    def __init__(self, inputImage=None, objectID=1, seed=None,
+    def __init__(self, inputImage=None, objectID=1, multiple=False, seed=None,
                  propagationScaling=1.0, curvatureScaling=0.7, advectionScaling=1.0,
-                 maximumRMSError=0.01, numberOfIterations=1000):
-        super().__init__(inputImage=inputImage, objectID=objectID)
+                 maximumRMSError=0.01, numberOfIterations=1000, canny_lower=0.02, canny_upper=0.04):
+        super().__init__(inputImage=inputImage, objectID=objectID, multiple=multiple)
         self.parameters = FixedDict({'propagationScaling': float(propagationScaling),
                                      'curvatureScaling': float(curvatureScaling),
                                      'advectionScaling': float(advectionScaling),
                                      'maximumRMSError': float(maximumRMSError),
-                                     'numberOfIterations': int(numberOfIterations)})
+                                     'numberOfIterations': int(numberOfIterations),
+                                     'canny_lower': float(canny_lower),
+                                     'canny_upper': float(canny_upper)})
         self.seed = seed
 
     @property
@@ -319,7 +336,10 @@ class GeodesicActiveContour(Segmentation):
         seedlist.append(im.image.TransformPhysicalPointToIndex(ls.GetCentroid(1)))
         seedImage = sitk.ConfidenceConnected(im.image, seedlist, multiplier=2.0, numberOfIterations=4)
 
-        seedImage = sitk.BinaryMorphologicalClosing(seedImage, [3, 3, 2])
+        if seedImage.GetDimension() == 3:
+            seedImage = sitk.BinaryMorphologicalClosing(seedImage, [3, 3, 2])
+        else:
+            seedImage = sitk.BinaryMorphologicalClosing(seedImage, [3, 3])
 
         seedImage = EightBitImage(data=seedImage, spacing=im.spacing)
         return seedImage
@@ -327,9 +347,18 @@ class GeodesicActiveContour(Segmentation):
     def execute(self):
         d = sitk.SignedMaurerDistanceMap(self.__seed.image, insideIsPositive=False, squaredDistance=False,
                                          useImageSpacing=True)
-        canny = sitk.CannyEdgeDetection(self._inputImage.image, 0.05, 0.1, variance=[s / 5.0 for s in self._inputImage.spacing])
+        grad = sitk.GradientMagnitude(self._inputImage.image)
+        grad = FloatImage(data=grad, spacing=self._inputImage.spacing, normalize=False)
+        grad = grad.getPixelRange()[1]
+        #canny = sitk.CannyEdgeDetection(self._inputImage.image, 0.01, 0.1, variance=[s / 10.0 for s in self._inputImage.spacing])
+        #self._inputImage.image.SetSpacing([1.0]*self._inputImage.image.GetDimension())
+        lower = self.parameters['canny_lower'] * grad
+        upper = self.parameters['canny_upper'] * grad
+        canny = sitk.CannyEdgeDetection(self._inputImage.image, lower, upper)
+        #self._inputImage.image.SetSpacing(self._inputImage.spacing)
         speed = sitk.SignedMaurerDistanceMap(sitk.Cast(canny, sitk.sitkUInt8),
                                              squaredDistance=False, useImageSpacing=True)
+        speed = sitk.RescaleIntensity(speed, 0.0, 1.0)
         gd = sitk.GeodesicActiveContourLevelSetImageFilter()
         gd.SetPropagationScaling(self.parameters['propagationScaling'])
         gd.SetCurvatureScaling(self.parameters['curvatureScaling'])
@@ -337,7 +366,7 @@ class GeodesicActiveContour(Segmentation):
         gd.SetMaximumRMSError(self.parameters['maximumRMSError'])
         gd.SetNumberOfIterations(self.parameters['numberOfIterations'])
         ls = gd.Execute(d, speed)
-        ls = sitk.Median(ls, [1,1,1])
+        ls = sitk.Median(ls, [1]*ls.GetDimension())
         print("... Geodesic Active Contour Segmentation Completed")
         print(("... ... Elapsed Iterations: {:d}"
                 .format(gd.GetElapsedIterations())))
@@ -345,8 +374,9 @@ class GeodesicActiveContour(Segmentation):
                 .format(gd.GetRMSChange())))
         b = sitk.BinaryThreshold(ls, -1e7, min(self._inputImage.spacing) / 2.0)
         self.outputImage = EightBitImage(b*self.objectID, spacing=self._inputImage.image.GetSpacing())
-        self._chooseObject()
-        self.edgePotential = Image(speed, spacing=self._inputImage.spacing)
+        if not self.multiple:
+            self._chooseObject()
+        self.edgePotential = FloatImage(speed, spacing=self._inputImage.spacing, normalize=False)
         self.isovalue = 0.5
         self._generateIsoContour(baseImage=ls)
 

@@ -89,10 +89,10 @@ class RegionsOfInterest(object):
         ws = wb[wb.sheetnames[0]]
         values = np.array(list(ws.values))[self.start_row:,self.start_col:].astype(int)
         if self.order == 'ImageJ':
-            if self.inputImage.image.GetDimension == 3:
+            if self.inputImage.image.GetDimension() == 3:
                 if self.slice2d:
-                    regions = np.ones(values.shape[0], 6)
-                    regions[:,0:5] = values[i, [0,1,4,2,3]]
+                    regions = np.ones((values.shape[0], 6))
+                    regions[:,0:5] = values[:, [0,1,4,2,3]]
                 else:
                     if values.shape[0] % 2 != 0:
                         raise ValueError('An odd number of rows were read from regions_of_interest file and ImageJ was specified for order. Something is wrong!')
@@ -114,9 +114,15 @@ class RegionsOfInterest(object):
         for i in range(self.regions_of_interest.shape[0]):
             size = [int(ind) for ind in self.regions_of_interest[i,dim:]]
             origin = [int(ind) for ind in self.regions_of_interest[i,0:dim]]
-            self.images.append(self.__inputImage.__class__(sitk.RegionOfInterest(self.inputImage.image,
-                                                           size,
-                                                           origin),
-                                                           spacing=self.inputImage.image.GetSpacing()))
+            if len(size) == 3 and size[-1] == 1:
+                size[-1] = 0
+                roi = sitk.Extract(self.inputImage.image, size, origin)
+            else:
+                roi = sitk.RegionOfInterest(self.inputImage.image,
+                                            size,
+                                            origin)
+            ndim = roi.GetDimension()
+            self.images.append(self.__inputImage.__class__(roi,
+                                                           spacing=self.inputImage.image.GetSpacing()[0:ndim]))
 
 

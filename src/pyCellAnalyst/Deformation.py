@@ -99,11 +99,20 @@ class ObjectPairs(object):
             reader.SetFileName(f)
             surfaces.append(reader.GetOutput())
 
-class AffineDeformation(ObjectPairs):
-    pass
+    def getDeformationByIterativeClosestPoint():
+        pass
 
-class PrincipalMomentsOfInertia(ObjectPairs):
-    pass
+    def getDeformationByEllipsoidalMethod():
+        pass
 
-class DiffeomorphicDemons(ObjectPairs):
-    pass
+    def getDeformationByDiffeomorpicDemons():
+        pass
+
+    def saveAsNumpy():
+        pass
+
+    def saveAsUnstructuredGrid():
+        pass
+
+    def saveAsPolyData():
+        pass
