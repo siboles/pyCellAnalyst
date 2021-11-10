@@ -46,8 +46,7 @@ def generateSuperEllipse(A, B, r, spacing):
     using super-ellipse to represent pseudo-cells
     (|x / A|)^r + (|y / B|)^r <= 1
     """
-    steps = np.array([2*(A + spacing[0]),
-                      2*(B + spacing[1])]) / np.array(spacing)
+    steps = (np.array([2*(A + spacing[0]), 2*(B + spacing[1])]) / np.array(spacing) + 0.5).astype(int)
     # this is reversed due to ordering difference of SimpleITK and numpy
     grid = np.meshgrid(np.linspace(-B - spacing[1], B + spacing[1], num=steps[1]),
                        np.linspace(-A - spacing[0], A + spacing[0], num=steps[0]), indexing='ij')

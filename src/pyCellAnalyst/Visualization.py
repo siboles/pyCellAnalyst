@@ -199,3 +199,14 @@ class SliceViewer(object):
             imageViewer.Render()
 
         renderWindowInteractor.Start()
+
+class viewer3d():
+    def __init__(self):
+        self.image = None
+        self.polydata = None
+
+    def setImage(self):
+        pass
+
+    def addPolyData(self, polydata):
+        pass

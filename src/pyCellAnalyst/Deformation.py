@@ -9,6 +9,43 @@ class ObjectPairs(object):
     def __init__(self, reference=None, deformed=None, identifier=None):
         self.reference = reference
         self.deformed = deformed
+        self.results = FixedDict({"Ellipsoidal": FixedDict({"Major Axis Length": [],
+                                                            "Major Axis Direction": [],
+                                                            "Major Axis Strain": [],
+                                                            "Middle Axis Length": [],
+                                                            "Middle Axis Direction": [],
+                                                            "Middle Axis Strain": [],
+                                                            "Minor Axis Length": [],
+                                                            "Minor Axis Direction": [],
+                                                            "Minor Axis Strain": [],
+                                                            "Volumetric Strain": [],
+                                                            "Volumetric Strain Error": []}),
+                                  "Affine": FixedDict({"Transform": [],
+                                                       "Deformation Gradient": [],
+                                                       "Strain": [],
+                                                       "Principal Strain 1": [],
+                                                       "Principal Strain 1 Direction": [],
+                                                       "Principal Strain 2": [],
+                                                       "Principal Strain 2 Direction": [],
+                                                       "Principal Strain 3": [],
+                                                       "Principal Strain 3 Direction": [],
+                                                       "Maximum Shear Strain": [],
+                                                       "Volumetric Strain": [],
+                                                       "Volumetric Strain Error": []}),
+                                  "DiffeomorphicDemons": FixedDict({"Transform": [],
+                                                                    "Displacement": [],
+                                                                    "Deformation Gradient": [],
+                                                                    "Strain": [],
+                                                                    "Principal Strain 1": [],
+                                                                    "Principal Strain 1 Direction": [],
+                                                                    "Principal Strain 2": [],
+                                                                    "Principal Strain 2 Direction": [],
+                                                                    "Principal Strain 3": [],
+                                                                    "Principal Strain 3 Direction": [],
+                                                                    "Maximum Shear Strain": [],
+                                                                    "Volumetric Strain": [],
+                                                                    "Volumetric Strain Error": []}),
+                                  "Volumetric Strain": []})
 
     @property
     def reference(self):
@@ -69,7 +106,7 @@ class ObjectPairs(object):
             print("::WARNING:: File extension not recognized. Attempting to read as a VTP.")
             reader = vtk.vtkXMLPolyDataReader()
         reader.SetFileName(f)
-        return reader.GetOutput()
+        return [reader.GetOutput()]
 
     def __parseSurfaceDirectory(self, d):
         files = sorted(os.listdir(d))
@@ -98,15 +135,37 @@ class ObjectPairs(object):
         for f in files:
             reader.SetFileName(f)
             surfaces.append(reader.GetOutput())
+        return surfaces
 
     def getDeformationByIterativeClosestPoint():
-        pass
+        icp = vtk.vtkIterativeClosestPointTransform()
+        for (r, d) in zip(self.__reference, self.__deformed):
+            icp.SetSource(r)
+            icp.SetTarget(d)
+            icp.GetLandmarkTransform().SetModeToAffine()
+            icp.SetMaximumMeanDistance(0.001)
+            icp.SetCheckMeanDistance(1)
+            icp.SetMaximumNumberOfIterations(10000)
+            icp.StartByMatchingCentroidsOn()
+            icp.Update()
+
+            F = np.zeros((3,3), float)
+            for i in range(3):
+                for j in range(3):
+                    F[i, j] = icp.GetMatrix().GetElement(i, j)
+            E = 0.5 * (np.dot(F.T), F - np.eye(3))
+            self.results["Strain"].append(np.array([E]))
+            self.results["Transform"].append(icp.GetTransform())
+            self.__getPrincipalStrains()
 
     def getDeformationByEllipsoidalMethod():
         pass
 
     def getDeformationByDiffeomorpicDemons():
         pass
+
+    def __getPrincipalStrains():
+        l, e = np.linalg.eigh(self.results["Strain"][-1])
 
     def saveAsNumpy():
         pass
