@@ -14,7 +14,7 @@ requirements:
     - cgal
     - tbb
     - vtk
-    - simpleitk 1.0*
+    - simpleitk
     - numpy
     - scipy
     - matplotlib
@@ -22,7 +22,7 @@ requirements:
     - xlrd
     - xlwt
     - wquantiles
-    - febio 0.2*
+    - febio
   run:
     - python
     - future
@@ -30,7 +30,7 @@ requirements:
     - cgal
     - tbb
     - vtk
-    - simpleitk 1.0*
+    - simpleitk
     - numpy
     - scipy
     - matplotlib
@@ -38,7 +38,7 @@ requirements:
     - xlrd
     - xlwt
     - wquantiles
-    - febio 0.2*
+    - febio
 
 test:
   imports:
